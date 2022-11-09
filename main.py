@@ -7,120 +7,92 @@ import requests
 from datetime import datetime
 from nextcord.ext import tasks
 import dotenv
+import pytz
+from geopy.geocoders import Nominatim
+from nextcord import Interaction, SlashOption, slash_command
+
+from timezonefinder import TimezoneFinder
 
 dotenv.load_dotenv("token.env")
 
 intents = nextcord.Intents.all()
 
-client = commands.Bot(command_prefix='tmm', intents=intents, activity = nextcord.Activity(type=nextcord.ActivityType.listening, name="quran")) #initializing the bot
+client = commands.Bot(command_prefix='tmm', intents=intents, activity = nextcord.Activity(type=nextcord.ActivityType.listening, name="Qur'aan")) #initializing the bot
 
 mongo = MongoClient(os.getenv("PYMONGO_CREDS"))
 
-db = mongo.servers
+db = mongo.tMuslim
 
+@client.slash_command(guild_ids=client.guilds, name = "nextprayer",description="Get the next prayer time")
+async def nextprayer(interaction: Interaction):
+    if (not db.servers.find_one({"_id": interaction.guild.id})):
+            await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="You haven't set up your server yet! Please use /setup command to set up your server.", color=nextcord.Color.red()), ephemeral=True)
+            return
+    city = db.servers.find_one({"_id": interaction.guild.id})["city"] #get city
+    country = db.servers.find_one({"_id": interaction.guild.id})["country"] #get country
+    timezone = db.servers.find_one({"_id": interaction.guild.id})["timezone"] #get UTC offset
+    tz = pytz.timezone(timezone) #get timezone
+    time = datetime.now(tz) #get current time
+    hour = time.hour
+    minute = time.minute
+    prayerTimes = requests.get(f"http://api.aladhan.com/v1/timingsByCity?city={city}&country={country}&method=2").json()
+    nextPrayer = await getNextPrayer(prayerTimes, hour, minute) #get next prayer
+    nextPrayerTime = prayerTimes["data"]["timings"][nextPrayer] #get next prayer time from API data
 
-#command to get the next prayer time
-@client.command(pass_context=True)
-async def nextPrayer(ctx):
-    #check if server is setup (has entry in database)
-    if (not db.servers.find_one({"_id": ctx.message.guild.id})):
-        await ctx.send("Server not setup. Please use the setup command to setup the server.")
+    timeUntil = await calculateRemainingTime(int(nextPrayerTime[0:2]), int(nextPrayerTime[3:5]), hour, minute, nextPrayer == "Fajr") #calculate remaining time
+    await interaction.response.send_message(embed=nextcord.Embed(title="Next Prayer", description=f"The next prayer is **{nextPrayer}** in **{timeUntil[0]} hours and {timeUntil[1]} minutes** ({nextPrayerTime})", color=nextcord.Color.green()))
+    
+@client.slash_command(guild_ids=client.guilds, description="Setup your server for use with the bot")
+async def setup(interaction: nextcord.Interaction, city: str = SlashOption(required=True, description="Your city"), country: str = SlashOption(required=True, description="Your country")):
+    if (db.servers.find_one({"_id": interaction.guild.id})):
+        await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="You have already set up your server! To edit your preferences, use the /set command", color=nextcord.Color.red()), ephemeral=True)
         return
-    else:
-        #get server settings
-        city = db.servers.find_one({"_id": ctx.message.guild.id})["city"] #get city
-        country = db.servers.find_one({"_id": ctx.message.guild.id})["country"] #get country
-        utcOffset = db.servers.find_one({"_id": ctx.message.guild.id})["timezone"] #get UTC offset
-        #get UTC time
-        prayerTimes = requests.get("http://api.aladhan.com/v1/timingsByCity?city={0}&country={1}&method=2".format(city,country)).json()
-        #get current time in UTC
-        time = datetime.utcnow()
-        #adjust UTC time to match users timezone
-        hour = time.hour + int(utcOffset) 
-        if (hour < 0): #if time is negative, add 24 to get correct time
-            hour = 24 + hour
-        minute = time.minute   #get minyte
-        nextPrayer = await getNextPrayer(prayerTimes, hour, minute) #get next prayer
-        nextPrayerTime = prayerTimes["data"]["timings"][nextPrayer] #get next prayer time from API data
-        
-        timeUntil = await calculateRemainingTime(int(nextPrayerTime[0:2]), int(nextPrayerTime[3:5]), hour, minute, nextPrayer == "Fajr") #calculate remaining time
-        await ctx.send("The next prayer is {0} at {1}, in {2} hours and {3} minutes".format(nextPrayer, nextPrayerTime, timeUntil[0], timeUntil[1]))        
-
-@client.command(pass_context=True)
-async def setup(ctx):
-    await ctx.send("Welcome to tMuslim - Discord Edition! For best results, please specify your time zone and city.\n\nPlease enter your offset from UTC:")
-    #get message from user
-    timezone = await client.wait_for('message', check=lambda message: message.author == ctx.author)
-    #check if user entered a number
-    timeZone = int(timezone.content)
-    await ctx.send("Please enter your city:")
-    city = await client.wait_for('message', check=lambda message: message.author == ctx.author)
-    await ctx.send("Please enter your country:")
-    country = await client.wait_for('message', check=lambda message: message.author == ctx.author)
-    #check if city is valid
-    requestURL = " http://api.aladhan.com/v1/calendarByCity?city={0}&country={1}&method=2"
-    #make request
-    request = requests.get(requestURL.format(city,country))
-    #check request code
-    if request.status_code == 404:
-        await ctx.send("Setup Failed. Invalid city or country. Please try again.")
-    else:
-        #save data to db
-        db.servers.insert_one({"_id": ctx.guild.id, "timezone": timezone.content, "city": city.content, "country": country.content})
-        await ctx.send("Setup Successful! tMuslim can now be used in this server!")  
-
+    try:
+        geolocator = Nominatim(user_agent="geoapiExercises")
+        location = geolocator.geocode(f"{city}, {country}")
+        obj = TimezoneFinder()
+        time_zone = obj.timezone_at(lng=location.longitude, lat=location.latitude)
+        db.servers.insert_one({"_id": interaction.guild.id, "timezone": time_zone, "city": city, "country": country})
+        await interaction.response.send_message(embed = nextcord.Embed(title = "Setup Complete", description = "Setup complete. tMuslim's feature are now active in this server", color = nextcord.Color.green()))
+    except:
+        await interaction.response.send_message(embed = nextcord.Embed(title = "Error", description = "An error occurred. Please check your city/country spelling and try again. If this problem persists, contact `TechMaster04#5002`. In the meantime, try a more common city/country in your timezone", color = nextcord.Color.red()))            
+ 
 @tasks.loop(seconds=60)
 async def athan():
     for guild in client.guilds:
         if (not db.servers.find_one({"_id": guild.id})):
             continue
-        else:
-            city = db.servers.find_one({"_id": guild.id})["city"] #get city
-            country = db.servers.find_one({"_id": guild.id})["country"] #get country
-            utcOffset = db.servers.find_one({"_id": guild.id})["timezone"] #get UTC offset
-            #get UTC time
-            prayerTimes = requests.get("http://api.aladhan.com/v1/timingsByCity?city={0}&country={1}&method=2".format(city,country)).json()
-            #get current time in UTC
-            time = datetime.utcnow()
-            #adjust UTC time to match users timezone
-            hour = time.hour + int(utcOffset) 
-            if (hour < 0): #if time is negative, add 24 to get correct time
-                hour = 24 + hour
-            minute = time.minute   #get minyte
-            nextPrayer = await getNextPrayer(prayerTimes, hour, minute) #get next prayer
-            nextPrayerTime = prayerTimes["data"]["timings"][nextPrayer] #get next prayer time from API data
-            #check if current time is equal to nextPrayerTime
-            if (hour == int(nextPrayerTime[:2]) and minute == int(nextPrayerTime[3:5])):
-                currentMax = 0
-                currentVC = None
-                for channel in guild.voice_channels:
-                    users = len(channel.voice_states.keys())
-                    if users > currentMax:
-                        currentMax = users
-                        currentVC = channel
-                    #check if bot is already in VC
-                if (currentVC and currentVC.permissions_for(guild.me).connect and currentVC.permissions_for(guild.me).speak and not guild.voice_client):
-                    await currentVC.connect()
-                    audio = None
-                    #if next prayer is fajr, play Athan1
-                    if (nextPrayer == "Fajr"):
-                        audio = nextcord.FFmpegOpusAudio("Athan1.mp3")
-                    else:
-                        audio = nextcord.FFmpegOpusAudio('Athan2.wav')
-                    voice = guild.voice_client #Getting the voice client
-                    #leave the vc after playing the audio
-                    player = voice.play(audio, after=lambda x=None: (client.loop.create_task(voice.disconnect())))
-
-@client.command(pass_context=True)  
-async def joinVC(ctx):
-    VC = ctx.message.author.voice.channel
-    await VC.connect()
-    audio = nextcord.FFmpegOpusAudio('Athan2.mp3')
-    voice = ctx.message.guild.voice_client #Getting the voice client
-    #leave the vc after playing the audio
-    player = voice.play(audio, after=lambda x=None: (client.loop.create_task(voice.disconnect())))
-
-
+        city = db.servers.find_one({"_id": guild.id})["city"] #get city
+        country = db.servers.find_one({"_id": guild.id})["country"] #get country
+        timezone = db.servers.find_one({"_id": guild.id})["timezone"] #get UTC offset
+        tz = pytz.timezone(timezone) #get timezone
+        time = datetime.now(tz) #get current time
+        hour = time.hour
+        minute = time.minute
+        prayerTimes = requests.get(f"http://api.aladhan.com/v1/timingsByCity?city={city}&country={country}&method=2").json()
+        nextPrayer = await getNextPrayer(prayerTimes, hour, minute) #get next prayer
+        nextPrayerTime = prayerTimes["data"]["timings"][nextPrayer] #get next prayer time from API data
+        #check if current time is equal to nextPrayerTime
+        if (hour == int(nextPrayerTime[:2]) and minute == int(nextPrayerTime[3:5])):
+            currentMax = 0
+            currentVC = None
+            for channel in guild.voice_channels:
+                users = len(channel.voice_states.keys())
+                if users > currentMax:
+                    currentMax = users
+                    currentVC = channel
+                #check if bot is already in VC
+            if (currentVC and currentVC.permissions_for(guild.me).connect and currentVC.permissions_for(guild.me).speak and not guild.voice_client):
+                await currentVC.connect()
+                audio = None
+                #if next prayer is fajr, play Athan1
+                if (nextPrayer == "Fajr"):
+                    audio = nextcord.FFmpegOpusAudio("Athan1.wav")
+                else:
+                    audio = nextcord.FFmpegOpusAudio('Athan2.mp3')
+                voice = guild.voice_client #Getting the voice client
+                #leave the vc after playing the audio
+                player = voice.play(audio, after=lambda x=None: (client.loop.create_task(voice.disconnect())))
 athan.start()
 
 async def calculateRemainingTime(prayerHour, prayerMin, hour, minute, fajr):
@@ -164,15 +136,14 @@ async def calculateRemainingTime(prayerHour, prayerMin, hour, minute, fajr):
             localHourLeft += 1
             localMinLeft = localMinLeft - 60
         return localHourLeft, localMinLeft
-    else: #Otherwise proceed normally
-        localMinLeft = 60 - minute
-        localHours -= 1
-        localMinLeft += prayerMin
-        if (localMinLeft >= 60) :
-            localHourLeft += 1
-            localMinLeft = localMinLeft - 60        
-        localHourLeft = localHourLeft + ((localHours) - hour)
-        return localHourLeft, localMinLeft
+    localMinLeft = 60 - minute
+    localHours -= 1
+    localMinLeft += prayerMin
+    if (localMinLeft >= 60) :
+        localHourLeft += 1
+        localMinLeft = localMinLeft - 60        
+    localHourLeft = localHourLeft + ((localHours) - hour)
+    return localHourLeft, localMinLeft
     
 async def getNextPrayer(prayerTimes, hour, minute):
     fajrTime = prayerTimes["data"]["timings"]["Fajr"]
@@ -216,7 +187,6 @@ async def getNextPrayer(prayerTimes, hour, minute):
                 return "Fajr"
         return "Isha"
     
-
 #on ready event
 @client.event
 async def on_ready():
