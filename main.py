@@ -19,9 +19,7 @@ dotenv.load_dotenv("token.env")
 
 intents = nextcord.Intents.all()
 
-client = commands.Bot(command_prefix='tmm', intents=intents,
-                      activity=nextcord.Activity(type=nextcord.ActivityType.listening,
-                                                 name="Qur'aan"))  # initializing the bot
+client = commands.Bot(command_prefix='tmm', intents=intents, activity=nextcord.Activity(type=nextcord.ActivityType.listening, name="Qur'aan"))  # initializing the bot
 
 mongo = MongoClient(os.getenv("PYMONGO_CREDS"))
 
@@ -29,16 +27,15 @@ db = mongo.tMuslim
 
 
 async def get_time(guild: nextcord.Guild) -> tuple[int, int]:
-    tz = pytz.timezone(db.guilds.find_one({"guild_id": guild.id})["timezone"])
+    zone = db.servers.find_one({"_id": guild.id})["timezone"]
+    tz = pytz.timezone(zone)
     return datetime.now(tz).hour, datetime.now(tz).minute
 
 
 @client.slash_command(guild_ids=client.guilds, name="nextprayer", description="Get the next prayer time")
 async def nextprayer(interaction: Interaction):
     if not db.servers.find_one({"_id": interaction.guild.id}):
-        await interaction.response.send_message(embed=nextcord.Embed(title="Error",
-                                                                     description="You haven't set up your server yet! Please use /setup command to set up your server.",
-                                                                     color=nextcord.Color.red()), ephemeral=True)
+        await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="You haven't set up your server yet! Please use /setup command to set up your server.", color=nextcord.Color.red()), ephemeral=True)
         return
     city = db.servers.find_one({"_id": interaction.guild.id})["city"]  # get city
     country = db.servers.find_one({"_id": interaction.guild.id})["country"]  # get country
@@ -47,35 +44,79 @@ async def nextprayer(interaction: Interaction):
     nextPrayer = await getNextPrayer(prayerTimes, hour, minute)  # get next prayer
     nextPrayerTime = prayerTimes["data"]["timings"][nextPrayer]  # get next prayer time from API data
 
-    timeUntil = await calculateRemainingTime(int(nextPrayerTime[0:2]), int(nextPrayerTime[3:5]), hour, minute,
-                                             nextPrayer == "Fajr")  # calculate remaining time
-    await interaction.response.send_message(embed=nextcord.Embed(title="Next Prayer",
-                                                                 description=f"The next prayer is **{nextPrayer}** in **{timeUntil[0]} hours and {timeUntil[1]} minutes** ({nextPrayerTime})",
-                                                                 color=nextcord.Color.green()))
+    timeUntil = await calculateRemainingTime(int(nextPrayerTime[0:2]), int(nextPrayerTime[3:5]), hour, minute, nextPrayer == "Fajr")  # calculate remaining time
+    await interaction.response.send_message(embed=nextcord.Embed(title="Next Prayer", description=f"The next prayer is **{nextPrayer}** in **{timeUntil[0]} hours and {timeUntil[1]} minutes** ({nextPrayerTime})", color=nextcord.Color.green()))
 
 
 @client.slash_command(guild_ids=client.guilds, description="Setup your server for use with the bot")
-async def setup(interaction: nextcord.Interaction, city: str = SlashOption(required=True, description="Your city"),
-                country: str = SlashOption(required=True, description="Your country")):
+async def setup(interaction: nextcord.Interaction, city: str = SlashOption(required=True, description="Your city"), country: str = SlashOption(required=True, description="Your country"), reaction_role_channel: nextcord.TextChannel = SlashOption(required=True, description="Channel to send reaction roles to for prayer timings"), role: nextcord.Role = SlashOption(required=False, description="The role to ping for prayer times. If not provided, the bot will create a new role."), channel: nextcord.TextChannel = SlashOption(required=False, description="The channel to send prayer times to. If not provided, the bot will create a new channel.")):
     if db.servers.find_one({"_id": interaction.guild.id}):
-        await interaction.response.send_message(embed=nextcord.Embed(title="Error",
-                                                                     description="You have already set up your server! To edit your preferences, use the /set command",
-                                                                     color=nextcord.Color.red()), ephemeral=True)
+        await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="You have already set up your server! To edit your preferences, use the /set command", color=nextcord.Color.red()), ephemeral=True)
         return
     try:
         geolocator = Nominatim(user_agent="geoapiExercises")
         location = geolocator.geocode(f"{city}, {country}")
         obj = TimezoneFinder()
         time_zone = obj.timezone_at(lng=location.longitude, lat=location.latitude)
-        db.servers.insert_one({"_id": interaction.guild.id, "timezone": time_zone, "city": city, "country": country})
-        await interaction.response.send_message(embed=nextcord.Embed(title="Setup Complete",
-                                                                     description="Setup complete. tMuslim's feature are now active in this server",
-                                                                     color=nextcord.Color.green()))
-    except:
-        await interaction.response.send_message(embed=nextcord.Embed(title="Error",
-                                                                     description="An error occurred. Please check your city/country spelling and try again. If this problem persists, contact `TechMaster04#5002`. In the meantime, try a more common city/country in your timezone",
-                                                                     color=nextcord.Color.red()))
+        if not role:
+            # If no role is provided, create a new one called "tMuslim Notifications"
+            role = await interaction.guild.create_role(name="tMuslim Notifications", mentionable=True, color=nextcord.Color.green())
+        if not channel:
+            # If no channel is provided, create a new one called "tMuslim Notifications"
+            # Only people with "role" should be able to see the channel
+            channel = await interaction.guild.create_text_channel(name="🌙tMuslim Notifications", topic="Channel for prayer pings", overwrites={interaction.guild.default_role: nextcord.PermissionOverwrite(read_messages=False, view_channel = False), role: nextcord.PermissionOverwrite(read_messages=True, view_channel = True, send_messages=False)})
 
+        message = await reaction_role_channel.send(embed=nextcord.Embed(title="Prayer Times", description="React to this message to get pinged for prayer times", color=nextcord.Color.green()))
+        db.servers.insert_one({"_id": interaction.guild.id, "city": city, "country": country, "timezone": time_zone, "role": role.id, "channel": channel.id, 'reaction_role_message': message.id})
+
+        await message.add_reaction("🕌")
+        
+        await interaction.response.send_message(embed=nextcord.Embed(title="Setup Complete", description="Setup complete. tMuslim's feature are now active in this server", color=nextcord.Color.green()))
+    except:
+        await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="An error occurred. Please check your city/country spelling and try again. If this problem persists, contact `TechMaster04#5002`. In the meantime, try a more common city/country in your timezone", color=nextcord.Color.red()))
+
+# reaction roles
+@client.event
+async def on_raw_reaction_add(payload: nextcord.RawReactionActionEvent):
+    if payload.message_id == db.servers.find_one({"_id": payload.guild_id})["reaction_role_message"]:
+        #check if it's the bot
+        if payload.user_id == client.user.id:
+            return
+        if payload.emoji.name == "🕌":
+            await payload.member.add_roles(nextcord.Object(id=db.servers.find_one({"_id": payload.guild_id})["role"]))
+            await payload.member.send(embed=nextcord.Embed(title="Prayer Times", description="You have been pinged for prayer times. You can change this by removing the reaction from the message in the channel you set up your server in", color=nextcord.Color.green()))
+# If the user removes the reaction, remove the role
+@client.event
+async def on_raw_reaction_remove(payload: nextcord.RawReactionActionEvent):
+    if payload.message_id == db.servers.find_one({"_id": payload.guild_id})["reaction_role_message"]:
+        if payload.emoji.name == "🕌":
+            guild = client.get_guild(payload.guild_id)
+            member = guild.get_member(payload.user_id)
+            await member.remove_roles(nextcord.Object(id=db.servers.find_one({"_id": payload.guild_id})["role"]))
+            await member.send(embed=nextcord.Embed(title="Prayer Times", description="You have been removed from the prayer times role. You can change this by adding the reaction back to the message in the channel you set up your server in", color=nextcord.Color.green()))
+@client.slash_command(guild_ids=client.guilds, description="View a list of all prayer times")
+async def prayerlist(interaction: nextcord.Interaction):
+    if not db.servers.find_one({"_id": interaction.guild.id}):
+        await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="You haven't set up your server yet! Please use /setup command to set up your server.", color=nextcord.Color.red()), ephemeral=True)
+        return
+    city = db.servers.find_one({"_id": interaction.guild.id})["city"]  # get city
+    country = db.servers.find_one({"_id": interaction.guild.id})["country"]  # get country
+    hour, minute = await get_time(interaction.guild)  # get time
+    prayerTimes = requests.get(f"http://api.aladhan.com/v1/timingsByCity?city={city}&country={country}&method=2").json()
+    embed = nextcord.Embed(title="Prayer Times", description=f"Prayer times for {city}, {country} on {datetime.now().month}/{datetime.now().day}", color=nextcord.Color.green())
+    nextPrayer = await getNextPrayer(prayerTimes, hour, minute)  # get next prayer
+    for prayer in prayerTimes["data"]["timings"]:
+        if prayer == nextPrayer:
+            embed.add_field(name=f"**{prayer}**", value=f"**{prayerTimes['data']['timings'][prayer]}**", inline=False)
+            continue
+        if (prayer == "Imsak"):
+            break
+        if (prayer == "Sunset"):
+            continue
+        embed.add_field(name=f"{prayer}", value=f"{prayerTimes['data']['timings'][prayer]}", inline=False)
+        
+    await interaction.response.send_message(embed=embed)
+    
 
 @tasks.loop(seconds=60)
 async def athan():
@@ -115,6 +156,21 @@ async def athan():
                 voice = guild.voice_client  # Getting the voice client
                 # leave the vc after playing the audio
                 player = voice.play(audio, after=lambda x=None: (client.loop.create_task(voice.disconnect())))
+                # get role to ping
+                role = guild.get_role(db.servers.find_one({"_id": guild.id})["role"])
+                await guild.system_channel.send(f"{role.mention} {nextPrayer} has started!")
+
+@client.command(pass_context=True)
+async def delete(ctx):
+    # remove server from db
+    db.servers.delete_one({"_id": ctx.guild.id})
+
+@client.command(pass_context=True)
+async def ping(ctx):
+    # get role
+    role = ctx.guild.get_role(db.servers.find_one({"_id": ctx.guild.id})["role"])
+    channel = ctx.guild.get_channel(db.servers.find_one({"_id": ctx.guild.id})["channel"])
+    await channel.send(f"{role.mention} tMuslim Prayer Notification Test")
 
 
 athan.start()
@@ -161,6 +217,7 @@ async def calculateRemainingTime(prayerHour, prayerMin, hour, minute, fajr):
             localHourLeft += 1
             localMinLeft = localMinLeft - 60
         return localHourLeft, localMinLeft
+    # If we're not calculating Fajr, we can calculate normally 
     localMinLeft = 60 - minute
     localHours -= 1
     localMinLeft += prayerMin
