@@ -1,3 +1,4 @@
+import random
 from asyncio import tasks
 import os
 import nextcord
@@ -18,6 +19,9 @@ tMuslim = commands.Bot(command_prefix='tmm', intents=intents, activity=nextcord.
 
 mongo = MongoClient(os.getenv("PYMONGO_CREDS"))
 db = mongo.tMuslim
+async def conv_to_arabic(number):
+    arabicNumbers = {0: '۰', 1: '١', 2: '٢', 3: '۳', 4: '۴', 5: '۵', 6: '٦', 7: '۷', 8: '۸', 9: '۹'}
+    return ''.join([arabicNumbers[int(digit)] for digit in str(number)])
 
 async def elapsed_time(start_hour, start_minute, end_hour, end_minute):
     hour_left = 0
@@ -75,15 +79,13 @@ async def getNextPrayer(prayerTimes, hour, minute):
         return "Isha"
 
 async def get_time(guild: nextcord.Guild) -> tuple[int, int]:
-    zone = db.servers.find_one({"_id": guild.id})["timezone"]
-    tz = pytz.timezone(zone)
+    tz = pytz.timezone(db.servers.find_one({"_id": guild.id})["timezone"])
     return datetime.now(tz).hour, datetime.now(tz).minute
 
 async def get_prayer_list(guild: nextcord.Guild):
     city = db.servers.find_one({"_id": guild.id})["city"]  # get city
     country = db.servers.find_one({"_id": guild.id})["country"]  # get country
-    prayerTimes = requests.get(f"http://api.aladhan.com/v1/timingsByCity?city={city}&country={country}").json()
-    return prayerTimes
+    return requests.get(f"http://api.aladhan.com/v1/timingsByCity?city={city}&country={country}").json()
 
 @tMuslim.slash_command(guild_ids=tMuslim.guilds, name="nextprayer", description="Get the next prayer time")
 async def nextprayer(interaction: Interaction):
@@ -99,29 +101,51 @@ async def nextprayer(interaction: Interaction):
 
 
 @tMuslim.slash_command(guild_ids=tMuslim.guilds, description="Setup your server for use with the bot")
-async def setup(interaction: nextcord.Interaction, city: str = SlashOption(required=True, description="Your city"), country: str = SlashOption(required=True, description="Your country"), reaction_role_channel: nextcord.TextChannel = SlashOption(required=True, description="Channel to send reaction roles to for prayer timings"), role: nextcord.Role = SlashOption(required=False, description="The role to ping for prayer times. If not provided, the bot will create a new role."), channel: nextcord.TextChannel = SlashOption(required=False, description="The channel to send prayer times to. If not provided, the bot will create a new channel.")):
+async def setup(interaction: nextcord.Interaction, city: str = SlashOption(required=True, description="Your city"),
+                country: str = SlashOption(required=True, description="Your country"),
+                role: nextcord.Role = SlashOption(required=False, description="The role to ping for prayer times. If not provided, the bot will create a new role."),
+                reaction_roles: nextcord.TextChannel = SlashOption(required=False, description="Channel for prayer-time reaction roles. If not provided, the bot will create a new channel."),
+                channel: nextcord.TextChannel = SlashOption(required=False, description="The channel to send prayer notifications to. If not provided, the bot will create a new channel."),
+                athaan_channel: nextcord.VoiceChannel = SlashOption(required=False, description="The channel to play athaan in. If not provided, the bot will create a new channel.")):
+
+
     if db.servers.find_one({"_id": interaction.guild.id}):
         await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="You have already set up your server! To edit your preferences, use the /set command", color=nextcord.Color.red()), ephemeral=True)
         return
     try:
+        await interaction.response.defer()
         geolocator = Nominatim(user_agent="geoapiExercises")
         location = geolocator.geocode(f"{city}, {country}")
         obj = TimezoneFinder()
         time_zone = obj.timezone_at(lng=location.longitude, lat=location.latitude)
+        category = None
         if not role:
             # If no role is provided, create a new one called "tMuslim Notifications"
             role = await interaction.guild.create_role(name="🕌tMuslim Notifications", mentionable=True, color=nextcord.Color.green())
         if not channel:
+            if not category:
+                category = await interaction.guild.create_category("🕌tMuslim")
             # If no channel is provided, create a new one called "tMuslim Notifications"
             # Only people with "role" should be able to see the channel
-            channel = await interaction.guild.create_text_channel(name="🕌tMuslim Notifications", topic="Channel for prayer pings", overwrites={interaction.guild.default_role: nextcord.PermissionOverwrite(read_messages=False, view_channel = False), role: nextcord.PermissionOverwrite(read_messages=True, view_channel = True, send_messages=False)})
-        
-        message = await reaction_role_channel.send(embed=nextcord.Embed(title="Prayer Times", description="React to this message to get pinged for prayer times", color=nextcord.Color.green()))
-        db.servers.insert_one({"_id": interaction.guild.id, "city": city, "country": country, "timezone": time_zone, "role": role.id, "channel": channel.id, 'reaction_role_message': message.id})
+            channel = await interaction.guild.create_text_channel(name="🕌tMuslim Notifications", category=category, topic="Channel for prayer pings", overwrites={interaction.guild.default_role: nextcord.PermissionOverwrite(read_messages=False, view_channel = False), role: nextcord.PermissionOverwrite(read_messages=True, view_channel = True, send_messages=False)})
+        if not reaction_roles:
+            if not category:
+                category = await interaction.guild.create_category("🕌tMuslim")
+            # If no channel is provided, create a new one called "tMuslim Notifications"
+            reaction_roles = await interaction.guild.create_text_channel(name="🕌tMuslim Reaction Roles", category=category, topic="Channel for prayer reaction roles")
+        if not athaan_channel:
+            if not category:
+                category = await interaction.guild.create_category("🕌tMuslim")
+            # Make a new channel called "tMuslim Athaan"
+            # Only people with "role" should be able to see the channel
+            athaan_channel = await interaction.guild.create_voice_channel(name="🕌tMuslim Athaan", category=category, overwrites={interaction.guild.default_role: nextcord.PermissionOverwrite(connect=False), role: nextcord.PermissionOverwrite(connect=True)})
+        message = await reaction_roles.send(embed=nextcord.Embed(title="Prayer Times", description="React to this message to get pinged for prayer times", color=nextcord.Color.green()))
+        db.servers.insert_one({"_id": interaction.guild.id, "city": city, "country": country, "timezone": time_zone, "role": role.id, "channel": channel.id, "athaanchannel": athaan_channel.id, "reaction_role_message": message.id})
         await message.add_reaction("🕌")
-        await interaction.response.send_message(embed=nextcord.Embed(title="🕌 Setup Complete", description="Setup complete! tMuslim's feature are now active in this server", color=nextcord.Color.green()))
-    except:
-        await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="An error occurred. Please check your city/country spelling and try again. If this problem persists, contact `TechMaster04#5002`. In the meantime, try a more common city/country in your timezone", color=nextcord.Color.red()))
+        await interaction.followup.send(embed=nextcord.Embed(title="🕌 Setup Complete", description="Setup complete! tMuslim's feature are now active in this server", color=nextcord.Color.green()))
+    except Exception as e:
+        print(e)
+        await interaction.followup.send(embed=nextcord.Embed(title="Error", description="An error occurred. Please check your city/country spelling and try again. If this problem persists, contact `TechMaster04#5002`. In the meantime, try a more common city/country in your timezone", color=nextcord.Color.red()))
 
 # reaction roles
 @tMuslim.event
@@ -164,6 +188,37 @@ async def prayerlist(interaction: nextcord.Interaction):
             continue
         embed.add_field(name=f"{prayer}", value=f"{prayerTimes['data']['timings'][prayer]}", inline=False)
         
+    await interaction.response.send_message(embed=embed)
+
+def return_suffix(day):
+    if day == 1 or day == 21 or day == 31:
+        return "st"
+    elif day == 2 or day == 22:
+        return "nd"
+    elif day == 3 or day == 23:
+        return "rd"
+    else:
+        return "th"
+
+@tMuslim.slash_command(guild_ids=tMuslim.guilds, name="hijridate", description="View the current hijri date")
+async def hijridate(interaction: nextcord.Interaction):
+    DD_MM_YY = datetime.now().strftime("%d-%m-%Y")
+    hijri_date = requests.get(f"http://api.aladhan.com/v1/gToH?date={DD_MM_YY}").json()
+    date = f"{hijri_date['data']['hijri']['day']}{return_suffix(int(hijri_date['data']['hijri']['day']))} of {hijri_date['data']['hijri']['month']['en']} {hijri_date['data']['hijri']['year']}\n{await conv_to_arabic(hijri_date['data']['hijri']['day'])} {hijri_date['data']['hijri']['month']['ar']} {await conv_to_arabic(hijri_date['data']['hijri']['year'])}"
+    footer = f"Gregorian date: {hijri_date['data']['gregorian']['date']}"
+    embed = nextcord.Embed(title="Hijri Date", description=date, color=nextcord.Color.green())
+    embed.set_footer(text=footer)
+    await interaction.response.send_message(embed=embed)
+
+@tMuslim.slash_command(guild_ids=tMuslim.guilds, name="names", description="View the name and definition of one of Allah's names")
+async def names(interaction: nextcord.Interaction, number: int = SlashOption(name="number", description="The number of the name you want to view", required=False)):
+    if not number:
+        number = random.randint(1, 99)
+    if (number > 99 or number < 1):
+        await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="Please enter a number between 1 and 99", color=nextcord.Color.red()), ephemeral=True)
+        return
+    name = requests.get(f"https://api.aladhan.com/v1/asmaAlHusna/{number}").json()
+    embed = nextcord.Embed(title=name["data"][0]["name"] + " (" + name["data"][0]['transliteration'] + ")", description=name["data"][0]["en"]['meaning'], color=nextcord.Color.green())
     await interaction.response.send_message(embed=embed)
 
 @tMuslim.command(pass_context=True)
