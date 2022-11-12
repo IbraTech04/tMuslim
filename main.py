@@ -238,35 +238,42 @@ async def athan():
     for guild in tMuslim.guilds:
         if not db.servers.find_one({"_id": guild.id}):
             continue
+        hour, minute = await get_time(guild)  # get time
         prayerTimes = await get_prayer_list(guild)
         nextPrayer = await getNextPrayer(prayerTimes, hour, minute)  # get next prayer
-        hour, minute = await get_time(guild)  # get time
         nextPrayerTime = prayerTimes["data"]["timings"][nextPrayer]  # get next prayer time from API data
         # check if current time is equal to nextPrayerTime
         if hour == int(nextPrayerTime[:2]) and minute == int(nextPrayerTime[3:5]):
-            currentMax = 0
-            currentVC = None
-            for channel in guild.voice_channels:
-                users = len(channel.voice_states.keys())
-                if users > currentMax:
-                    currentMax = users
-                    currentVC = channel
-                # check if bot is already in VC
-            if currentVC and currentVC.permissions_for(guild.me).connect and currentVC.permissions_for(
-                    guild.me).speak and not guild.voice_client:
-                await currentVC.connect()
-                audio = None
-                # if next prayer is fajr, play Athan1
-                if nextPrayer == "Fajr":
-                    audio = nextcord.FFmpegOpusAudio("Athan1.wav")
-                else:
-                    audio = nextcord.FFmpegOpusAudio('Athan2.mp3')
-                voice = guild.voice_client  # Getting the voice client
-                # leave the vc after playing the audio
-                player = voice.play(audio, after=lambda x=None: (tMuslim.loop.create_task(voice.disconnect())))
-                # get role to ping
-                role = guild.get_role(db.servers.find_one({"_id": guild.id})["role"])
-                await guild.system_channel.send(f"{role.mention} {nextPrayer} has started!")
+            # check if bot is in VC
+            if guild.voice_client:
+                continue
+            # get channel for VC
+            vc = guild.get_channel(db.servers.find_one({"_id": guild.id})["athaanchannel"])
+            await vc.connect()
+            role = guild.get_role(db.servers.find_one({"_id": guild.id})["role"])
+            # Get a list of everyone in a VC, and check if they have the role
+            # If they do, move them to the athan VC
+            server_vcs = guild.voice_channels
+            for channel in server_vcs:
+                for member in channel.members:
+                    if role in member.roles:
+                        await member.move_to(vc)
+            if nextPrayer == "Fajr":
+                audio = nextcord.FFmpegOpusAudio("Athan1.wav")
+            else:
+                audio = nextcord.FFmpegOpusAudio('Athan2.mp3')
+            voice = guild.voice_client  # Getting the voice client
+            # leave the vc after playing the audio
+            player = voice.play(audio, after=lambda x=None: (tMuslim.loop.create_task(voice.disconnect())))
+            # get role to ping
+            role = guild.get_role(db.servers.find_one({"_id": guild.id})["role"])
+            channel = guild.get_channel(db.servers.find_one({"_id": guild.id})["channel"])
+            await channel.send(f"{role.mention} {nextPrayer} has started!")
+        # if it's five minutes before the next prayer, send a reminder
+        if hour == int(nextPrayerTime[:2]) and minute == int(nextPrayerTime[3:5]) - 5:
+            role = guild.get_role(db.servers.find_one({"_id": guild.id})["role"])
+            channel = guild.get_channel(db.servers.find_one({"_id": guild.id})["channel"])
+            await channel.send(f"{role.mention} {nextPrayer} will start in 5 minutes!")
 athan.start()
 
 @tMuslim.event
