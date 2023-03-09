@@ -1,13 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="15d348e7-a2cf-43ec-8b11-e79291974b0d" name="Changes" comment="Updated requirements.txt&#10;Simplified a few functions, still needs work">
-      <change afterPath="$PROJECT_DIR$/Procfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/tMuslim Discord.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/tMuslim Discord.iml" afterDir="false" />
+    <list default="true" id="15d348e7-a2cf-43ec-8b11-e79291974b0d" name="Changes" comment="Added Hijri date and 99 names&#10;Updated setup process - Added categories">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tester.py" beforeDir="false" afterPath="$PROJECT_DIR$/tester.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -25,15 +20,14 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "WebServerToolWindowFactoryState": "false",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;
   }
-}]]></component>
+}</component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
@@ -49,17 +43,16 @@
       <workItem from="1667061932582" duration="37000" />
       <workItem from="1668021329563" duration="75000" />
       <workItem from="1668021421090" duration="72000" />
-      <workItem from="1668021508072" duration="1480000" />
-      <workItem from="1668178091951" duration="1226000" />
-      <workItem from="1668179615324" duration="5000" />
-      <workItem from="1678385492970" duration="78000" />
+      <workItem from="1668021508072" duration="1000000" />
+      <workItem from="1668192580740" duration="5002000" />
+      <workItem from="1668197900698" duration="21000" />
     </task>
-    <task id="LOCAL-00001" summary="Updated requirements.txt&#10;Simplified a few functions, still needs work">
-      <created>1668022556341</created>
+    <task id="LOCAL-00001" summary="Added Hijri date and 99 names&#10;Updated setup process - Added categories">
+      <created>1668197486586</created>
       <option name="number" value="00001" />
       <option name="presentableId" value="LOCAL-00001" />
       <option name="project" value="LOCAL" />
-      <updated>1668022556341</updated>
+      <updated>1668197486586</updated>
     </task>
     <option name="localTasksCounter" value="2" />
     <servers />
@@ -79,13 +72,22 @@
     </option>
   </component>
   <component name="VcsManagerConfiguration">
-    <MESSAGE value="Updated requirements.txt&#10;Simplified a few functions, still needs work" />
-    <option name="LAST_COMMIT_MESSAGE" value="Updated requirements.txt&#10;Simplified a few functions, still needs work" />
+    <MESSAGE value="Added Hijri date and 99 names&#10;Updated setup process - Added categories" />
+    <option name="LAST_COMMIT_MESSAGE" value="Added Hijri date and 99 names&#10;Updated setup process - Added categories" />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/main.py</url>
+          <line>206</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/tMuslim_Discord_Bot$Doctests_in_tester.coverage" NAME="Doctests in tester Coverage Results" MODIFIED="1668178750268" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/tMuslim_Discord_Bot$Doctests_in_main.coverage" NAME="Doctests in main Coverage Results" MODIFIED="1668178606665" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/tMuslim_Discord$main.coverage" NAME="main Coverage Results" MODIFIED="1666989920571" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/tMuslim_Discord_Bot$main.coverage" NAME="main Coverage Results" MODIFIED="1668021648593" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/tMuslim_Discord$main.coverage" NAME="main Coverage Results" MODIFIED="1668197160610" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>
