@@ -12,6 +12,7 @@ import pytz
 from geopy.geocoders import Nominatim
 from nextcord import Interaction, SlashOption, slash_command
 from timezonefinder import TimezoneFinder
+
 dotenv.load_dotenv("token.env")
 
 intents = nextcord.Intents.all()
@@ -19,22 +20,21 @@ tMuslim = commands.Bot(command_prefix='tmm', intents=intents, activity=nextcord.
 
 mongo = MongoClient(os.getenv("PYMONGO_CREDS"))
 db = mongo.tMuslim
+
 async def conv_to_arabic(number):
     arabicNumbers = {0: '۰', 1: '١', 2: '٢', 3: '۳', 4: '۴', 5: '۵', 6: '٦', 7: '۷', 8: '۸', 9: '۹'}
     return ''.join([arabicNumbers[int(digit)] for digit in str(number)])
 
-async def elapsed_time(start_hour, start_minute, end_hour, end_minute):
-    hour_left = 0
-    min_left = 60 - start_minute
-    end_hour -= 1
-    min_left += end_minute
-    if min_left >= 60:
-        hour_left += 1
-        min_left = min_left - 60
-    hour_left = hour_left + (end_hour - start_hour)
-    if hour_left < 0:
-        hour_left += 24
-    return hour_left, min_left
+
+async def calculateRemainingTime(prayerHour, prayerMin, hour, minute, fajr):
+    if fajr:  # If we're calculating Fajr do this
+        prayerHour += 24 if prayerHour < hour else 0
+        time_diff = (prayerHour - hour) * 60 + prayerMin - minute
+    else:  # If we're not calculating Fajr, we can calculate normally 
+        prayerHour += 24 if prayerHour <= hour and prayerMin <= minute else 0
+        time_diff = (prayerHour - hour - (prayerMin < minute)) * 60 + (prayerMin - minute) % 60
+    return divmod(time_diff, 60)
+
 
 async def getNextPrayer(prayerTimes, hour, minute):
     fajrTime = prayerTimes["data"]["timings"]["Fajr"]
@@ -85,7 +85,23 @@ async def get_time(guild: nextcord.Guild) -> tuple[int, int]:
 async def get_prayer_list(guild: nextcord.Guild):
     city = db.servers.find_one({"_id": guild.id})["city"]  # get city
     country = db.servers.find_one({"_id": guild.id})["country"]  # get country
-    return requests.get(f"http://api.aladhan.com/v1/timingsByCity?city={city}&country={country}").json()
+    time_in_server_tz = datetime.now(pytz.timezone(db.servers.find_one({"_id": guild.id})["timezone"]))
+    
+    # To avoid getting API-rate limited, we will cache the prayer times for 24 hours in Mongodb
+    
+    # First, we check if the prayer times are cached in the database
+    # Check if db.prayerTimes.find_one({"_id": f"city:country"}) is not None
+    if db.prayerTimes.find_one({"_id": f"{city}:{country}"}):
+        # Check if the prayer times are for todays date (in the timezone of the server)
+        if db.prayerTimes.find_one({"_id": f"{city}:{country}"})["date"] == time_in_server_tz.strftime("%d/%m/%Y"):
+            return db.prayerTimes.find_one({"_id": f"{city}:{country}"})["prayerTimes"]
+    db.prayerTimes.delete_one({"_id": f"{city}:{country}"})
+    # If the prayer times are not for todays date (or they don't exist), we will delete the old prayer times from the database and get new ones
+    
+    times = requests.get(f"http://api.aladhan.com/v1/timingsByCity?city={city}&country={country}").json()
+    # Append the prayer times to the database
+    db.prayerTimes.insert_one({"_id": f"{city}:{country}", "prayerTimes": times, "date": time_in_server_tz.strftime("%d/%m/%Y")})
+    return times
 
 @tMuslim.slash_command(guild_ids=tMuslim.guilds, name="nextprayer", description="Get the next prayer time")
 async def nextprayer(interaction: Interaction):
@@ -96,7 +112,7 @@ async def nextprayer(interaction: Interaction):
     hour, minute = await get_time(interaction.guild)  # get time
     nextPrayer = await getNextPrayer(prayerTimes, hour, minute)  # get next prayer
     nextPrayerTime = prayerTimes["data"]["timings"][nextPrayer]  # get next prayer time from API data
-    timeUntil = await elapsed_time(int(nextPrayerTime[0:2]), int(nextPrayerTime[3:5]), hour, minute)  # calculate remaining time
+    timeUntil = await calculateRemainingTime(int(nextPrayerTime[0:2]), int(nextPrayerTime[3:5]), hour, minute, nextPrayer == "Fajr")  # calculate remaining time
     await interaction.response.send_message(embed=nextcord.Embed(title="Next Prayer", description=f"The next prayer is **{nextPrayer}** in **{timeUntil[0]} hours and {timeUntil[1]} minutes** ({nextPrayerTime})", color=nextcord.Color.green()))
 
 
@@ -223,8 +239,9 @@ async def names(interaction: nextcord.Interaction, number: int = SlashOption(nam
 
 @tMuslim.command(pass_context=True)
 async def delete(ctx):
-    # remove server from db
-    db.servers.delete_one({"_id": ctx.guild.id})
+    if ctx.message.author.id == 516413751155621899:
+        # remove server from db
+        db.servers.delete_one({"_id": ctx.guild.id})
 
 @tMuslim.command(pass_context=True)
 async def ping(ctx):
@@ -243,7 +260,7 @@ async def athan():
         nextPrayer = await getNextPrayer(prayerTimes, hour, minute)  # get next prayer
         nextPrayerTime = prayerTimes["data"]["timings"][nextPrayer]  # get next prayer time from API data
         # check if current time is equal to nextPrayerTime
-        if hour == int(nextPrayerTime[:2]) and minute == int(nextPrayerTime[3:5]):
+        if hour == int(nextPrayerTime[:2]) and minute == int(nextPrayerTime[3:5]) or True:
             # check if bot is in VC
             if guild.voice_client:
                 continue
@@ -261,7 +278,7 @@ async def athan():
             if nextPrayer == "Fajr":
                 audio = nextcord.FFmpegOpusAudio("Athan1.wav")
             else:
-                audio = nextcord.FFmpegOpusAudio('Athan2.mp3')
+                audio = nextcord.FFmpegOpusAudio('Athan2.flac')
             voice = guild.voice_client  # Getting the voice client
             # leave the vc after playing the audio
             player = voice.play(audio, after=lambda x=None: (tMuslim.loop.create_task(voice.disconnect())))
@@ -278,6 +295,9 @@ athan.start()
 
 @tMuslim.event
 async def on_ready():
+    # set status to "Do not disturb"
+    await tMuslim.change_presence(status=nextcord.Status.dnd, activity=nextcord.Game("Starting up... Please wait"))
     print(f"{tMuslim.user} is ready to go!")
-
+    # set status to "Online"
+    await tMuslim.change_presence(status=nextcord.Status.online, activity=nextcord.Game("Mosque Building Simulator"))
 tMuslim.run(os.getenv("TMUSLIM_TOKEN"))
