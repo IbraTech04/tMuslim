@@ -25,85 +25,51 @@ async def conv_to_arabic(number):
     arabicNumbers = {0: '۰', 1: '١', 2: '٢', 3: '۳', 4: '۴', 5: '۵', 6: '٦', 7: '۷', 8: '۸', 9: '۹'}
     return ''.join([arabicNumbers[int(digit)] for digit in str(number)])
 
-async def elapsed_time(start_hour, start_minute, end_hour, end_minute):
-    hour_left = 0
-    min_left = 60 - start_minute
-    end_hour -= 1
-    min_left += end_minute
-    if min_left >= 60:
-        hour_left += 1
-        min_left = min_left - 60
-    hour_left = hour_left + (end_hour - start_hour)
-    if hour_left < 0:
-        hour_left += 24
-    return hour_left, min_left
+async def calculateRemainingTime(prayerHour, prayerMin, hour, minute, fajr):
+    if prayerHour == hour and prayerMin == minute:  # If the current time matches the prayer time, return 0, 0
+        return 0, 0
+    if fajr:  # If we're calculating Fajr do this
+        prayerHour += 24 if prayerHour < hour else 0
+        time_diff = (prayerHour - hour) * 60 + prayerMin - minute
+    else:  # If we're not calculating Fajr, we can calculate normally 
+        prayerHour += 24 if prayerHour <= hour and prayerMin <= minute else 0
+        time_diff = (prayerHour - hour - (prayerMin < minute)) * 60 + (prayerMin - minute) % 60
+    return divmod(time_diff, 60)
 
 async def getNextPrayer(prayerTimes, hour, minute):
-    fajrTime = prayerTimes["data"]["timings"]["Fajr"]
-    duhurTime = prayerTimes["data"]["timings"]["Dhuhr"]
-    asrTime = prayerTimes["data"]["timings"]["Asr"]
-    maghribTime = prayerTimes["data"]["timings"]["Maghrib"]
-    ishaaTime = prayerTimes["data"]["timings"]["Isha"]
-    if hour > int(ishaaTime[0:2]) or hour <= int(fajrTime[0:2]):
-        if hour == int(fajrTime[0:2]):
-            if minute <= int(fajrTime[3:5]):
-                return "Fajr"
-            else:
-                return "Dhuhr"
-        return "Fajr"
-    elif int(fajrTime[0:2]) <= hour <= int(duhurTime[0:2]):
-        if hour == int(duhurTime[0:2]):
-            if minute <= int(duhurTime[3:5]):
-                return "Dhuhr"
-            else:
-                return "Asr"
-        return "Dhuhr"
-    elif int(duhurTime[0:2]) <= hour <= int(asrTime[0:2]):
-        if hour == int(asrTime[0:2]):
-            if minute <= int(asrTime[3:5]):
-                return "Asr"
-            else:
-                return "Maghrib"
-        return "Asr"
-    elif int(asrTime[0:2]) <= hour <= int(maghribTime[0:2]):
-        if hour == int(maghribTime[0:2]):
-            if minute <= int(maghribTime[3:5]):
-                return "Maghrib"
-            else:
-                return "Isha"
-        return "Maghrib"
-    elif int(maghribTime[0:2]) <= hour <= int(ishaaTime[0:2]):
-        if hour == int(ishaaTime[0:2]):
-            if minute <= int(ishaaTime[3:5]):
-                return "Isha"
-            else:
-                return "Fajr"
-        return "Isha"
+    prayer_order = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
+    prayer_times = [prayerTimes["data"]["timings"][prayer] for prayer in prayer_order]
+
+    current_time = hour * 60 + minute
+    for i, prayer_time in enumerate(prayer_times):
+        prayer_hour = int(prayer_time[0:2])
+        prayer_minute = int(prayer_time[3:5])
+        prayer_time_minutes = prayer_hour * 60 + prayer_minute
+        if prayer_time_minutes > current_time:
+            return prayer_order[i]
+    # If we've reached the end of the list, the next prayer is Fajr the next day
+    return "Fajr"
+
 
 async def get_time(guild: nextcord.Guild) -> tuple[int, int]:
     tz = pytz.timezone(db.servers.find_one({"_id": guild.id})["timezone"])
     return datetime.now(tz).hour, datetime.now(tz).minute
 
 async def get_prayer_list(guild: nextcord.Guild):
-    city = db.servers.find_one({"_id": guild.id})["city"]  # get city
-    country = db.servers.find_one({"_id": guild.id})["country"]  # get country
-    time_in_server_tz = datetime.now(pytz.timezone(db.servers.find_one({"_id": guild.id})["timezone"]))
+    city = db.servers.find_one({"_id": guild.id})["city"]
+    country = db.servers.find_one({"_id": guild.id})["country"]
+    tz = pytz.timezone(db.servers.find_one({"_id": guild.id})["timezone"])
+    date_str = datetime.now(tz).strftime("%d/%m/%Y")
     
-    # To avoid getting API-rate limited, we will cache the prayer times for 24 hours in Mongodb
+    prayer_times = db.prayerTimes.find_one({"_id": f"{city}:{country}"})
+    if prayer_times and prayer_times.get("date") == date_str:
+        return prayer_times["prayerTimes"]
     
-    # First, we check if the prayer times are cached in the database
-    # Check if db.prayerTimes.find_one({"_id": f"city:country"}) is not None
-    if db.prayerTimes.find_one({"_id": f"{city}:{country}"}):
-        # Check if the prayer times are for todays date (in the timezone of the server)
-        if db.prayerTimes.find_one({"_id": f"{city}:{country}"})["date"] == time_in_server_tz.strftime("%d/%m/%Y"):
-            return db.prayerTimes.find_one({"_id": f"{city}:{country}"})["prayerTimes"]
     db.prayerTimes.delete_one({"_id": f"{city}:{country}"})
-    # If the prayer times are not for todays date (or they don't exist), we will delete the old prayer times from the database and get new ones
-    
-    times = requests.get(f"http://api.aladhan.com/v1/timingsByCity?city={city}&country={country}").json()
-    # Append the prayer times to the database
-    db.prayerTimes.insert_one({"_id": f"{city}:{country}", "prayerTimes": times, "date": time_in_server_tz.strftime("%d/%m/%Y")})
-    return times
+    response = requests.get(f"http://api.aladhan.com/v1/timingsByCity?city={city}&country={country}").json()
+    db.prayerTimes.insert_one({"_id": f"{city}:{country}", "prayerTimes": response, "date": date_str})
+    return response
+
 
 @tMuslim.slash_command(guild_ids=tMuslim.guilds, name="nextprayer", description="Get the next prayer time")
 async def nextprayer(interaction: Interaction):
@@ -252,47 +218,50 @@ async def ping(ctx):
     channel = ctx.guild.get_channel(db.servers.find_one({"_id": ctx.guild.id})["channel"])
     await channel.send(f"{role.mention} tMuslim Prayer Notification Test")
 
-@tasks.loop(seconds=60)
+@tasks.loop(seconds=50)
 async def athan():
     for guild in tMuslim.guilds:
-        if not db.servers.find_one({"_id": guild.id}):
+        server_info = db.servers.find_one({"_id": guild.id})
+        if not server_info:
             continue
-        hour, minute = await get_time(guild)  # get time
-        prayerTimes = await get_prayer_list(guild)
-        nextPrayer = await getNextPrayer(prayerTimes, hour, minute)  # get next prayer
-        nextPrayerTime = prayerTimes["data"]["timings"][nextPrayer]  # get next prayer time from API data
-        # check if current time is equal to nextPrayerTime
-        if hour == int(nextPrayerTime[:2]) and minute == int(nextPrayerTime[3:5]) or True:
-            # check if bot is in VC
-            if guild.voice_client:
+
+        hour, minute = await get_time(guild)
+        prayer_times = await get_prayer_list(guild)
+        next_prayer = await getNextPrayer(prayer_times, hour, minute)
+        next_prayer_time = prayer_times["data"]["timings"][next_prayer]
+        if f"{hour:02d}:{minute:02d}" == next_prayer_time:
+            vc = guild.get_channel(server_info["athaanchannel"])
+            
+            # check if the bot is already in a voice channel
+            voice = nextcord.utils.get(tMuslim.voice_clients, guild=guild) 
+            if voice and voice.is_connected():
                 continue
-            # get channel for VC
-            vc = guild.get_channel(db.servers.find_one({"_id": guild.id})["athaanchannel"])
             await vc.connect()
-            role = guild.get_role(db.servers.find_one({"_id": guild.id})["role"])
-            # Get a list of everyone in a VC, and check if they have the role
-            # If they do, move them to the athan VC
-            server_vcs = guild.voice_channels
-            for channel in server_vcs:
-                for member in channel.members:
-                    if role in member.roles:
-                        await member.move_to(vc)
-            if nextPrayer == "Fajr":
-                audio = nextcord.FFmpegOpusAudio("Athan1.wav")
-            else:
-                audio = nextcord.FFmpegOpusAudio('Athan2.flac')
-            voice = guild.voice_client  # Getting the voice client
-            # leave the vc after playing the audio
-            player = voice.play(audio, after=lambda x=None: (tMuslim.loop.create_task(voice.disconnect())))
-            # get role to ping
-            role = guild.get_role(db.servers.find_one({"_id": guild.id})["role"])
-            channel = guild.get_channel(db.servers.find_one({"_id": guild.id})["channel"])
-            await channel.send(f"{role.mention} {nextPrayer} has started!")
-        # if it's five minutes before the next prayer, send a reminder
-        if hour == int(nextPrayerTime[:2]) and minute == int(nextPrayerTime[3:5]) - 5:
-            role = guild.get_role(db.servers.find_one({"_id": guild.id})["role"])
-            channel = guild.get_channel(db.servers.find_one({"_id": guild.id})["channel"])
-            await channel.send(f"{role.mention} {nextPrayer} will start in 5 minutes!")
+
+            role = guild.get_role(server_info["role"])
+            members_with_role = [
+                member
+                for channel in guild.voice_channels
+                for member in channel.members
+                if role in member.roles
+            ]
+            for member in members_with_role:
+                await member.move_to(vc)
+
+            audio_path = "Athan1.wav" if next_prayer == "Fajr" else "Athan2.flac"
+            audio = nextcord.FFmpegOpusAudio(audio_path)
+            voice = guild.voice_client
+            player = voice.play(audio, after=lambda x: tMuslim.loop.create_task(voice.disconnect()))
+
+            channel = guild.get_channel(server_info["channel"])
+            await channel.send(f"{role.mention} {next_prayer} has started!")
+
+        elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{int(next_prayer_time[3:5])-5:02d}":
+            role = guild.get_role(server_info["role"])
+            channel = guild.get_channel(server_info["channel"])
+            await channel.send(f"{role.mention} {next_prayer} will start in 5 minutes!")
+
+
 athan.start()
 
 @tMuslim.event
