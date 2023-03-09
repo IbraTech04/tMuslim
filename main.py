@@ -25,16 +25,18 @@ async def conv_to_arabic(number):
     arabicNumbers = {0: '۰', 1: '١', 2: '٢', 3: '۳', 4: '۴', 5: '۵', 6: '٦', 7: '۷', 8: '۸', 9: '۹'}
     return ''.join([arabicNumbers[int(digit)] for digit in str(number)])
 
-
-async def calculateRemainingTime(prayerHour, prayerMin, hour, minute, fajr):
-    if fajr:  # If we're calculating Fajr do this
-        prayerHour += 24 if prayerHour < hour else 0
-        time_diff = (prayerHour - hour) * 60 + prayerMin - minute
-    else:  # If we're not calculating Fajr, we can calculate normally 
-        prayerHour += 24 if prayerHour <= hour and prayerMin <= minute else 0
-        time_diff = (prayerHour - hour - (prayerMin < minute)) * 60 + (prayerMin - minute) % 60
-    return divmod(time_diff, 60)
-
+async def elapsed_time(start_hour, start_minute, end_hour, end_minute):
+    hour_left = 0
+    min_left = 60 - start_minute
+    end_hour -= 1
+    min_left += end_minute
+    if min_left >= 60:
+        hour_left += 1
+        min_left = min_left - 60
+    hour_left = hour_left + (end_hour - start_hour)
+    if hour_left < 0:
+        hour_left += 24
+    return hour_left, min_left
 
 async def getNextPrayer(prayerTimes, hour, minute):
     fajrTime = prayerTimes["data"]["timings"]["Fajr"]
