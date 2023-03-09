@@ -20,6 +20,15 @@ mongo = MongoClient(os.getenv("PYMONGO_CREDS"))
 db = mongo.tMuslim
 
 async def elapsed_time(start_hour, start_minute, end_hour, end_minute):
+    """
+    >>>elapsed_time(23, 59, 0, 0)
+    (0, 1)
+    :param start_hour:
+    :param start_minute:
+    :param end_hour:
+    :param end_minute:
+    :return:
+    """
     hour_left = 0
     min_left = 60 - start_minute
     end_hour -= 1
