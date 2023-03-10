@@ -233,9 +233,7 @@ async def athan():
         prayer_times = await get_prayer_list(guild)
         next_prayer = await getNextPrayer(prayer_times, hour, minute)
         next_prayer_time = prayer_times["data"]["timings"][next_prayer]
-        
-        next_prayer_time = f"{hour:02d}:{minute:02d}"
-        
+                
         if f"{hour:02d}:{minute:02d}" == next_prayer_time:
             vc = guild.get_channel(server_info["athaanchannel"])
             
