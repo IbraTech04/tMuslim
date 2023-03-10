@@ -218,7 +218,7 @@ async def ping(ctx):
     channel = ctx.guild.get_channel(db.servers.find_one({"_id": ctx.guild.id})["channel"])
     await channel.send(f"{role.mention} tMuslim Prayer Notification Test")
 
-@tasks.loop(seconds=50)
+@tasks.loop(seconds=30)
 async def athan():
     for guild in tMuslim.guilds:
         server_info = db.servers.find_one({"_id": guild.id})
