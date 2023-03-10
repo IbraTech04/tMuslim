@@ -222,17 +222,18 @@ async def ping(ctx):
     channel = ctx.guild.get_channel(db.servers.find_one({"_id": ctx.guild.id})["channel"])
     await channel.send(f"{role.mention} tMuslim Prayer Notification Test")
 
-@tasks.loop(seconds=30)
+@tasks.loop(seconds=40)
 async def athan():
     for guild in tMuslim.guilds:
         server_info = db.servers.find_one({"_id": guild.id})
         if not server_info:
             continue
-
+        
         hour, minute = await get_time(guild)
         prayer_times = await get_prayer_list(guild)
         next_prayer = await getNextPrayer(prayer_times, hour, minute)
         next_prayer_time = prayer_times["data"]["timings"][next_prayer]
+                
         if f"{hour:02d}:{minute:02d}" == next_prayer_time:
             vc = guild.get_channel(server_info["athaanchannel"])
             
@@ -240,7 +241,7 @@ async def athan():
             voice = nextcord.utils.get(tMuslim.voice_clients, guild=guild) 
             if voice and voice.is_connected():
                 continue
-            await vc.connect()
+            voice = await vc.connect()
 
             role = guild.get_role(server_info["role"])
             members_with_role = [
@@ -254,8 +255,7 @@ async def athan():
 
             audio_path = "Athan1.wav" if next_prayer == "Fajr" else "Athan2.flac"
             audio = nextcord.FFmpegOpusAudio(audio_path)
-            voice = guild.voice_client
-            player = voice.play(audio, after=lambda x: tMuslim.loop.create_task(voice.disconnect()))
+            voice.play(audio, after=lambda x=None: (tMuslim.loop.create_task(voice.disconnect())))
 
             channel = guild.get_channel(server_info["channel"])
             await channel.send(f"{role.mention} {next_prayer} has started!")
