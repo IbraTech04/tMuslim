@@ -112,17 +112,21 @@ async def setup(interaction: nextcord.Interaction, city: str = SlashOption(requi
             # If no channel is provided, create a new one called "tMuslim Notifications"
             # Only people with "role" should be able to see the channel
             channel = await interaction.guild.create_text_channel(name="🕌tMuslim Notifications", category=category, topic="Channel for prayer pings", overwrites={interaction.guild.default_role: nextcord.PermissionOverwrite(read_messages=False, view_channel = False), role: nextcord.PermissionOverwrite(read_messages=True, view_channel = True, send_messages=False)})
+            # Add tMuslim as a user to the channel
+            channel = await channel.set_permissions(interaction.guild.me, read_messages=True, send_messages=True)
         if not reaction_roles:
             if not category:
                 category = await interaction.guild.create_category("🕌tMuslim")
             # If no channel is provided, create a new one called "tMuslim Notifications"
             reaction_roles = await interaction.guild.create_text_channel(name="🕌tMuslim Reaction Roles", category=category, topic="Channel for prayer reaction roles")
+            reaction_roles = await reaction_roles.set_permissions(interaction.guild.me, read_messages=True, send_messages=True)
         if not athaan_channel:
             if not category:
                 category = await interaction.guild.create_category("🕌tMuslim")
             # Make a new channel called "tMuslim Athaan"
             # Only people with "role" should be able to see the channel
             athaan_channel = await interaction.guild.create_voice_channel(name="🕌tMuslim Athaan", category=category, overwrites={interaction.guild.default_role: nextcord.PermissionOverwrite(connect=False), role: nextcord.PermissionOverwrite(connect=True)})
+            athaan_channel = await athaan_channel.set_permissions(interaction.guild.me, connect=True, speak=True)
         message = await reaction_roles.send(embed=nextcord.Embed(title="Prayer Times", description="React to this message to get pinged for prayer times", color=nextcord.Color.green()))
         db.servers.insert_one({"_id": interaction.guild.id, "city": city, "country": country, "timezone": time_zone, "role": role.id, "channel": channel.id, "athaanchannel": athaan_channel.id, "reaction_role_message": message.id})
         await message.add_reaction("🕌")
@@ -258,7 +262,7 @@ async def athan():
             channel = guild.get_channel(server_info["channel"])
             await channel.send(f"{role.mention} {next_prayer} has started!")
 
-        elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{int(next_prayer_time[3:5])-5:02d}":
+        elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{(int(next_prayer_time[3:5])-5)%60:02d}":
             role = guild.get_role(server_info["role"])
             channel = guild.get_channel(server_info["channel"])
             await channel.send(f"{role.mention} {next_prayer} will start in 5 minutes!")
