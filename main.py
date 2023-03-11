@@ -266,7 +266,6 @@ async def athan():
             await channel.send(f"{role.mention} {next_prayer} has started!")
 
         elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{(int(next_prayer_time[3:5])-5)%60:02d}":
-        elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{(int(next_prayer_time[3:5])-5)%60:02d}":
             role = guild.get_role(server_info["role"])
             channel = guild.get_channel(server_info["channel"])
             await channel.send(f"{role.mention} {next_prayer} will start in 5 minutes!")
