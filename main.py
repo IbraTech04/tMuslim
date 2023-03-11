@@ -45,7 +45,7 @@ async def getNextPrayer(prayerTimes, hour, minute):
         prayer_hour = int(prayer_time[0:2])
         prayer_minute = int(prayer_time[3:5])
         prayer_time_minutes = prayer_hour * 60 + prayer_minute
-        if prayer_time_minutes > current_time:
+        if prayer_time_minutes >= current_time:
             return prayer_order[i]
     # If we've reached the end of the list, the next prayer is Fajr the next day
     return "Fajr"
@@ -222,7 +222,7 @@ async def ping(ctx):
     channel = ctx.guild.get_channel(db.servers.find_one({"_id": ctx.guild.id})["channel"])
     await channel.send(f"{role.mention} tMuslim Prayer Notification Test")
 
-@tasks.loop(seconds=40)
+@tasks.loop(seconds=10)
 async def athan():
     for guild in tMuslim.guilds:
         server_info = db.servers.find_one({"_id": guild.id})
@@ -233,7 +233,8 @@ async def athan():
         prayer_times = await get_prayer_list(guild)
         next_prayer = await getNextPrayer(prayer_times, hour, minute)
         next_prayer_time = prayer_times["data"]["timings"][next_prayer]
-                
+
+    
         if f"{hour:02d}:{minute:02d}" == next_prayer_time:
             vc = guild.get_channel(server_info["athaanchannel"])
             
