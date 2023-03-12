@@ -29,6 +29,10 @@ class Settings(commands.Cog):
         await self.database.set_five_minute_reminder(interaction.guild.id, value)
         await interaction.response.send_message(embed=nextcord.Embed(title="Success", description=f"5-minute reminder set to {value}", color=nextcord.Color.green()), ephemeral=True)
         
+    @commands.Cog.listener()
+    async def on_guild_remove(self, guild: nextcord.Guild):
+        await self.database.delete_server(guild.id)
+        
     @nextcord.slash_command(name="unregister", description="Delete all data associated with your server")
     async def unregister(self, interaction: nextcord.Interaction):
         if not await self.database.is_server_registered(interaction.guild.id):

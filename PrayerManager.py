@@ -118,6 +118,13 @@ class PrayerManager(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
+    async def disconnect_from_vc(self, guild: nextcord.Guild):
+        """
+        Method which disconnects the bot from the voice channel
+        """
+        if guild.voice_client is not None:
+            await guild.voice_client.disconnect()
+
     @tasks.loop(seconds=60)
     async def athan(self):
         for guild in self.bot.guilds:
@@ -136,7 +143,7 @@ class PrayerManager(commands.Cog):
 
             if f"{hour:02d}:{minute:02d}" == next_prayer_time:
                 if next_prayer != "Sunrise":
-                    vc = guild.get_channel(
+                    vc = guild.get_channel(await
                         self.database.get_athaan_chanel(guild.id))
 
                     # check if the bot is already in a voice channel
@@ -145,7 +152,7 @@ class PrayerManager(commands.Cog):
                         continue
                     voice = await vc.connect()
 
-                    role = guild.get_role(self.database.get_athaan_role(guild.id))
+                    role = guild.get_role(await self.database.get_athaan_role(guild.id))
                     members_with_role=[
                         member
                         for channel in guild.voice_channels
@@ -164,10 +171,10 @@ class PrayerManager(commands.Cog):
                     audio_path = os.path.join(athaans_path, random.choice(os.listdir(athaans_path)))
                     audio=nextcord.FFmpegOpusAudio(audio_path)
                     voice.play(audio, after=lambda x=None: (
-                        self.bot.loop.create_task(voice.disconnect())))
+                        self.bot.loop.create_task(self.disconnect_from_vc(guild))))
 
-                channel=guild.get_channel(self.database.get_announcement_channel(guild.id))
-                await channel.send(f"{role.mention} {next_prayer} has started!")
+                channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
+                # await channel.send(f"{role.mention} {next_prayer} has started!")
 
             elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{(int(next_prayer_time[3:5])-5)%60:02d}":
                 role = guild.get_role(self.database.get_athaan_role(guild.id))
