@@ -41,7 +41,16 @@ class ServerManager:
         city
         country
         """
-        self.database.servers.update_one({"_id": guild_id, **data})
+        self.database.servers.update_one({"_id": guild_id}, {"$set": data}, upsert=True)
+
+    async def unregister_server(self, guild_id: str):
+        """
+        Unregisters a server in the database
+
+        === Preconditions ===
+        guild_id: the id of the server
+        """
+        self.database.servers.delete_one({"_id": guild_id})
 
     async def is_server_registered(self, guild_id: str) -> bool:
         """
@@ -59,7 +68,7 @@ class ServerManager:
         === Preconditions ===
         guild_id is the id of the server and is in the database
         """
-        return self.database.servers.find_one({"_id": guild_id})["channel_id"]
+        return self.database.servers.find_one({"_id": guild_id})["channel"]
 
     async def get_athaan_chanel(self, guild_id: str) -> str:
         """
@@ -68,7 +77,7 @@ class ServerManager:
         === Preconditions ===
         guild_id is the id of the server and is in the database
         """
-        return self.database.servers.find_one({"_id": guild_id})["vc_id"]
+        return self.database.servers.find_one({"_id": guild_id})["athaanchannel"]
 
     async def get_athaan_role(self, guild_id: str) -> str:
         """
@@ -77,7 +86,7 @@ class ServerManager:
         === Preconditions ===
         guild_id is the id of the server and is in the database
         """
-        return self.database.servers.find_one({"_id": guild_id})["role_id"]
+        return self.database.servers.find_one({"_id": guild_id})["role"]
 
     async def get_reaction_message_id(self, guild_id: str) -> str:
         """
@@ -86,7 +95,7 @@ class ServerManager:
         === Preconditions ===
         guild_id is the id of the server and is in the database
         """
-        return self.database.servers.find_one({"_id": guild_id})["reaction_message_id"]
+        return self.database.servers.find_one({"_id": guild_id})["reaction_role_message"]
 
     async def get_timezone(self, guild_id: str) -> str:
         """
@@ -123,6 +132,26 @@ class ServerManager:
         guild_id is the id of the server and is in the database
         """
         return self.database.servers.find_one({"_id": guild_id})["city"], self.database.servers.find_one({"_id": guild_id})["country"]
+
+    async def get_five_minute_reminder(self, guild_id: str) -> bool:
+        """
+        Returns whether the server has the five minute reminder enabled
+
+        === Preconditions ===
+        guild_id is the id of the server and is in the database
+        """
+        return self.database.servers.find_one({"_id": guild_id})["5_minute_reminder"] == "True"
+
+    async def set_five_minute_reminder(self, guild_id: str, value: bool):
+        """
+        Sets the five minute reminder to the given value
+
+        === Preconditions ===
+        guild_id is the id of the server and is in the database
+        value is a boolean
+        """
+        value = str(value)
+        self.database.servers.update_one({"_id": guild_id}, {"$set": {"5_minute_reminder": value}})
 
     async def get_prayer_list(self, location: tuple[str, str]) -> dict[str, any]:
         """

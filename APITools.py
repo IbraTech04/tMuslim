@@ -19,14 +19,14 @@ class APIHelper:
         """
         pass
     
-    async def get_prayer_time_list(self, city: str, country: str, time: datetime.time, method: int) -> dict[str, str]:
+    async def get_prayer_time_list(self, city: str, country: str, time: datetime.time) -> dict[str, str]:
         """
         Returns a list of prayer times for the given city and country
         """
         date_str = time.strftime("%d-%m-%Y")
 
-        response = requests.get(f"http://api.aladhan.com/v1/timingsByCity?city={city}&country={country}&method={method}&date={date_str}")
-        
+        response = requests.get(f"http://api.aladhan.com/v1/timingsByCity/{date_str}?city={city}&country={country}")
+                
         # We want to return a dict of only prayer times and sunrise, nothing else
         
         to_return = {}

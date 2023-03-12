@@ -3,7 +3,7 @@ from nextcord.ext import commands, tasks
 from Mongo import ServerManager
 from APITools import APIHelper
 from TimeManager import TimeManager
-
+import datetime
 
 class PrayerManager(commands.Cog):
     """
@@ -24,6 +24,7 @@ class PrayerManager(commands.Cog):
         self.timehelper = TimeManager()
         self.PRAYER_ORDER = ["Fajr", "Sunrise",
             "Dhuhr", "Asr", "Maghrib", "Isha"]
+        self.athan.start()
 
     async def _get_next_prayer(self, prayer_times, hour, minute):
         # Remove the _id key from the dictionary, if it exists
@@ -39,6 +40,16 @@ class PrayerManager(commands.Cog):
         # If we've reached the end of the list, the next prayer is Fajr the next day
         return "Fajr"
 
+    async def _get_prayer_list(self, location, time):
+        if self.database.is_location_in_database(location, time):
+            prayer_times = await self.database.get_prayer_list(location)
+        else:
+            prayer_times = await self.api.get_prayer_time_list(location[0], location[1], time)
+            # add date to the dictionary
+            prayer_times["date"] = f"{time.year}/{time.month}/{time.day}"
+            await self.database.insert_prayer_list(location, prayer_times)
+        return prayer_times
+            
     @nextcord.slash_command(name="nextprayer", description="Returns the time until the next prayer")
     async def nextprayer(self, interaction: nextcord.Interaction):
         """
@@ -51,24 +62,22 @@ class PrayerManager(commands.Cog):
 
         # Get the location of the server
         location = await self.database.get_server_location(interaction.guild.id)
-        formatted_location = f"{location[0]}:{location[1]}"
 
         time = await self.timehelper.get_time_in_timezone(await self.database.get_timezone(interaction.guild.id))
         hour = time.hour
         minute = time.minute
+        prayer_times = await self._get_prayer_list(location, time)
+        nextPrayer = await self._get_next_prayer(prayer_times, hour, minute)
 
-        if self.database.is_location_in_database(location, time):
-            prayerTimes = await self.database.get_prayer_list(location)
-        else:
-            prayerTimes = await self.api.get_prayer_time_list(location[0], location[1], time, 2)
-            # add date to the dictionary
-            prayerTimes["date"] = f"{time.year}/{time.month}/{time.day}"
-            await self.database.insert_prayer_list(location, prayerTimes)
+        # If the next prayer is Fajr, we need to check if it's today's fajr or tomorrow's
+        # i.e: if we're calculating for Fajr after Ishaa, we need to get tomorrow's Fajr
 
-        # get next prayer
-        nextPrayer = await self._get_next_prayer(prayerTimes, hour, minute)
-        # get next prayer time from API data
-        nextPrayerTime = prayerTimes[nextPrayer]
+        # Check if the next prayer is Fajr. If it is fajr, check if the current time is past Ishaa
+        if nextPrayer == "Fajr" and (hour > int(prayer_times["Isha"][0:2]) or (hour == int(prayer_times["Isha"][0:2]) and minute > int(prayer_times["Isha"][3:5]))):
+            time = time + datetime.timedelta(days=1)
+            prayer_times = await self._get_prayer_list(location, time)
+
+        nextPrayerTime = prayer_times[nextPrayer]
         # calculate remaining time
         timeUntil = await self.timehelper.calculateRemainingTime(int(nextPrayerTime[0:2]), int(nextPrayerTime[3:5]), hour, minute, nextPrayer == "Fajr")
         await interaction.response.send_message(embed=nextcord.Embed(title="Next Prayer", description=f"The next prayer is **{nextPrayer}** in **{timeUntil[0]} hours and {timeUntil[1]} minutes** ({nextPrayerTime})", color=nextcord.Color.green()))
@@ -85,29 +94,25 @@ class PrayerManager(commands.Cog):
         location = await self.database.get_server_location(interaction.guild.id)
         time = await self.timehelper.get_time_in_timezone(await self.database.get_timezone(interaction.guild.id))
 
-        if self.database.is_location_in_database(location, time):
-            prayerTimes = await self.database.get_prayer_list(location)
-        else:
-            prayerTimes = await self.api.get_prayer_time_list(location[0], location[1], time, 2)
-            # add date to the dictionary
-            prayerTimes["date"] = f"{time.year}/{time.month}/{time.day}"
-            await self.database.insert_prayer_list(location, prayerTimes)
+        prayer_times = await self._get_prayer_list(location, time)
         hour = time.hour
         minute = time.minute
 
+
+        next_prayer = await self._get_next_prayer(prayer_times, hour, minute)
+
+        if next_prayer == "Fajr" and (hour > int(prayer_times["Isha"][0:2]) or (hour == int(prayer_times["Isha"][0:2]) and minute > int(prayer_times["Isha"][3:5]))):
+            time = time + datetime.timedelta(days=1)
+            prayer_times = await self._get_prayer_list(location, time)
         embed = nextcord.Embed(
             title="Prayer Times", description=f"Prayer times for {location[0]}, {location[1]} on {time.month}/{time.day}", color=nextcord.Color.green())
-        next_prayer = await self._get_next_prayer(prayerTimes, hour, minute)
-
-        # Sort the prayer times in order - Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha
-
         for prayer in self.PRAYER_ORDER:
             if prayer == next_prayer:
                 embed.add_field(
-                    name=f"**{prayer}**", value=f"**{prayerTimes[prayer]}**", inline=False)
+                    name=f"**{prayer}**", value=f"**{prayer_times[prayer]}**", inline=False)
                 continue
             embed.add_field(
-                name=f"{prayer}", value=f"{prayerTimes[prayer]}", inline=False)
+                name=f"{prayer}", value=f"{prayer_times[prayer]}", inline=False)
 
         await interaction.response.send_message(embed=embed)
 
@@ -119,14 +124,8 @@ class PrayerManager(commands.Cog):
 
             location = await self.database.get_server_location(guild.id)
             time = await self.timehelper.get_time_in_timezone(await self.database.get_timezone(guild.id))
-            if self.database.is_location_in_database(location, time):
-                prayer_times = await self.database.get_prayer_list(location)
-            else:
-                prayer_times = await self.api.get_prayer_time_list(location[0], location[1], time, 2)
-                # add date to the dictionary
-                prayer_times["date"] = f"{time.year}/{time.month}/{time.day}"
-                await self.database.insert_prayer_list(location, prayer_times)
-
+            prayer_times = await self._get_prayer_list(location, time)
+            
             next_prayer = await self._get_next_prayer(prayer_times, time.hour, time.minute)
             next_prayer_time = prayer_times[next_prayer]
 
@@ -134,29 +133,30 @@ class PrayerManager(commands.Cog):
             minute = time.minute
 
             if f"{hour:02d}:{minute:02d}" == next_prayer_time:
-                vc = guild.get_channel(
-                    self.database.get_athaan_chanel(guild.id))
+                if next_prayer != "Sunrise":
+                    vc = guild.get_channel(
+                        self.database.get_athaan_chanel(guild.id))
 
-                # check if the bot is already in a voice channel
-                voice = nextcord.utils.get(self.bot.voice_clients, guild=guild)
-                if voice and voice.is_connected():
-                    continue
-                voice = await vc.connect()
+                    # check if the bot is already in a voice channel
+                    voice = nextcord.utils.get(self.bot.voice_clients, guild=guild)
+                    if voice and voice.is_connected():
+                        continue
+                    voice = await vc.connect()
 
-                role = guild.get_role(self.database.get_athaan_role(guild.id))
-                members_with_role=[
-                    member
-                    for channel in guild.voice_channels
-                    for member in channel.members
-                    if role in member.roles
-                ]
-                for member in members_with_role:
-                    await member.move_to(vc)
+                    role = guild.get_role(self.database.get_athaan_role(guild.id))
+                    members_with_role=[
+                        member
+                        for channel in guild.voice_channels
+                        for member in channel.members
+                        if role in member.roles
+                    ]
+                    for member in members_with_role:
+                        await member.move_to(vc)
 
-                audio_path="Athan1.wav" if next_prayer == "Fajr" else "Athan2.flac"
-                audio=nextcord.FFmpegOpusAudio(audio_path)
-                voice.play(audio, after=lambda x=None: (
-                    self.bot.loop.create_task(voice.disconnect())))
+                    audio_path="Athan1.wav" if next_prayer == "Fajr" else "Athan2.flac"
+                    audio=nextcord.FFmpegOpusAudio(audio_path)
+                    voice.play(audio, after=lambda x=None: (
+                        self.bot.loop.create_task(voice.disconnect())))
 
                 channel=guild.get_channel(self.database.get_announcement_channel(guild.id))
                 await channel.send(f"{role.mention} {next_prayer} has started!")
