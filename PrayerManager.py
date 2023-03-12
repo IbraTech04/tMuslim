@@ -1,3 +1,5 @@
+import os
+import random
 import nextcord
 from nextcord.ext import commands, tasks
 from Mongo import ServerManager
@@ -153,7 +155,13 @@ class PrayerManager(commands.Cog):
                     for member in members_with_role:
                         await member.move_to(vc)
 
-                    audio_path="Athan1.wav" if next_prayer == "Fajr" else "Athan2.flac"
+                    athaans_path = os.path.join(os.getcwd(), "Athaans")
+                    if next_prayer == "Fajr":
+                        athaans_path = os.path.join(athaans_path, "Fajr")
+                    else:
+                        athaans_path = os.path.join(athaans_path, "Other")
+                    # pick a random athaan 
+                    audio_path = os.path.join(athaans_path, random.choice(os.listdir(athaans_path)))
                     audio=nextcord.FFmpegOpusAudio(audio_path)
                     voice.play(audio, after=lambda x=None: (
                         self.bot.loop.create_task(voice.disconnect())))
