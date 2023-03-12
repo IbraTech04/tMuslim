@@ -1,6 +1,7 @@
 import requests
 import datetime
 from random import randint
+import json
 
 class APIHelper:
     """
@@ -17,7 +18,7 @@ class APIHelper:
         """
         Initializes the APIHelper
         """
-        pass
+        self.names = json.load(open("Assets/Names.json"))
     
     async def get_prayer_time_list(self, city: str, country: str, time: datetime.time) -> dict[str, str]:
         """
@@ -42,18 +43,18 @@ class APIHelper:
         name is an integer between 1 and 99 inclusive
         If name is not given, a random name is returned
         """
-        if name == -1:
+        if name == -1 or name not in range(1, 100):
             name = randint(1, 99)
         
-        name = requests.get(f"https://api.aladhan.com/v1/asmaAlHusna/{name}").json()
-
-        return name["data"][0]["name"], name["data"][0]['transliteration'], name["data"][0]["en"]['meaning']
+        name = self.names["names"][name - 1]
+        
+        return name["name"], name['transliteration'], name["en"]['meaning']
     
-    async def get_hijri_date(self) -> tuple[str, str, str]:
+    async def get_hijri_date(self, date: datetime.date) -> tuple[str, str, str, str]:
         """
         Returns a tuple of the english and Arabic hijri date and the hijri month and year
         """
-        DD_MM_YY = datetime.now().strftime("%d-%m-%Y")
+        DD_MM_YY = date.strftime("%d-%m-%Y")
         hijri_date = requests.get(f"http://api.aladhan.com/v1/gToH?date={DD_MM_YY}").json()
 
         return hijri_date['data']['hijri']['day'], hijri_date['data']['hijri']['month']['en'], hijri_date['data']['hijri']['year'], hijri_date['data']['hijri']['month']['ar']

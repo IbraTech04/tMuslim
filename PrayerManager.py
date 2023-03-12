@@ -1,5 +1,6 @@
 import os
 import random
+from typing import Optional
 import nextcord
 from nextcord.ext import commands, tasks
 from Mongo import ServerManager
@@ -174,9 +175,48 @@ class PrayerManager(commands.Cog):
                         self.bot.loop.create_task(self.disconnect_from_vc(guild))))
 
                 channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
-                # await channel.send(f"{role.mention} {next_prayer} has started!")
+                await channel.send(f"{role.mention} {next_prayer} has started!")
 
             elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{(int(next_prayer_time[3:5])-5)%60:02d}":
-                role = guild.get_role(self.database.get_athaan_role(guild.id))
-                channel=guild.get_channel(self.database.get_announcement_channel(guild.id))
+                # Check to see if they've enabled 5-minute reminders
+                if not await self.database.get_five_minute_reminder(guild.id):
+                    continue
+                role = guild.get_role(await self.database.get_athaan_role(guild.id))
+                channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
                 await channel.send(f"{role.mention} {next_prayer} will start in 5 minutes!")
+    
+    @nextcord.slash_command(name="names", description="Returns a random name of Allah and its meaning")
+    async def names(self, interaction:nextcord.Interaction, number: int = nextcord.SlashOption(name="number", description="The number of the name you want to view", required=False)):
+        """
+        Method which returns a random name of Allah and its meaning
+        """
+        embed = nextcord.Embed(title="99 Names of Allah", color=nextcord.Color.green())
+        if number is None:
+            name = await self.api.get_99_names()
+        else:
+            name = await self.api.get_99_names(number)
+        embed.add_field(name="Name", value=name[0])
+        embed.add_field(name="Transliteration", value=name[1])
+        embed.add_field(name="Meaning", value=name[2])
+        await interaction.response.send_message(embed=embed)
+        
+    @nextcord.slash_command(name="hijridate", description="Get the current Hijri date")
+    async def hijridate(self, interaction:nextcord.Interaction):
+        """
+        Method which returns the current Hijri date
+        """
+        embed = nextcord.Embed(title="Hijri Date", color=nextcord.Color.green())
+        if not await self.database.is_server_registered(interaction.guild.id):
+            date = datetime.datetime.now()
+            embed.set_footer(text="Server not registered; using UTC time. The date may be incorrect, use /setup to set up your server.")
+        else:
+            date = await self.timehelper.get_time_in_timezone(await self.database.get_timezone(interaction.guild.id))
+        hijri_date = await self.api.get_hijri_date(date)
+        
+        ar_year = await self.timehelper.conv_to_arabic(hijri_date[2])
+        ar_day = await self.timehelper.conv_to_arabic(hijri_date[0])
+        
+        description = f"{await self.timehelper.return_suffix(hijri_date[0])} of {hijri_date[1]} {hijri_date[2]}\n {ar_day} {hijri_date[3]} {ar_year}"
+        
+        embed.add_field(name="Date", value=description)
+        await interaction.response.send_message(embed=embed)
