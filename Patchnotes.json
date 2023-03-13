@@ -1,0 +1,22 @@
+{
+    "embed": {
+      "title": "tMuslim v2023.3 Patch Notes",
+      "description":"Welcome to the new tMuslim Architecture! Gone are the terrible non-OOP methods of yesterday! Hello Cogs and Classes! Here's the scoop on the new features:",
+      "color": 228111,
+  
+      "fields": [
+        {
+          "name": ":Python: New Architecture!",
+          "value": "tMuslim has been fully rewritten to support Cogs! Adding new features is now easier than ever!"
+        },
+        {
+          "name": ":clock1: Disable 5-minute-reminder",
+          "value": "Do the 5-minute prayer reminders bother you? Well, bother no more! Now you have the option to disable reminders! Try /toggle5minutes"
+        },
+        {
+          "name": ":vscode: Faster than ever before!",
+          "value": "We removed redundant code and sped up common tasks! Now tMuslim is faster than ever!"
+        }
+      ]
+    }
+  }
