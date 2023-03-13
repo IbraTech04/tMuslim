@@ -143,6 +143,7 @@ class PrayerManager(commands.Cog):
             minute = time.minute
 
             if f"{hour:02d}:{minute:02d}" == next_prayer_time:
+                role = guild.get_role(await self.database.get_athaan_role(guild.id))
                 if next_prayer != "Sunrise":
                     vc = guild.get_channel(await
                         self.database.get_athaan_chanel(guild.id))
@@ -153,7 +154,6 @@ class PrayerManager(commands.Cog):
                         continue
                     voice = await vc.connect()
 
-                    role = guild.get_role(await self.database.get_athaan_role(guild.id))
                     members_with_role=[
                         member
                         for channel in guild.voice_channels
