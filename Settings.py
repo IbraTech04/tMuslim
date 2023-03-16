@@ -105,3 +105,25 @@ class Settings(commands.Cog):
         except Exception as e:
             print(e)
             await interaction.followup.send(embed=nextcord.Embed(title="Error", description="An error occurred. Please check your city/country spelling and try again. If this problem persists, contact `TechMaster04#5002`. In the meantime, try a more common city/country in your timezone", color=nextcord.Color.red()))
+
+    # reaction roles
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload: nextcord.RawReactionActionEvent):
+        # check if the server is registered
+        if await self.database.is_server_registered(payload.guild_id):
+            #check if it's the bot
+            if payload.user_id == self.bot.user.id:
+                return
+            if payload.emoji.name == "🕌":
+                await payload.member.add_roles(nextcord.Object(id=await self.database.get_athaan_role(payload.guild_id)))
+                await payload.member.send(embed=nextcord.Embed(title="Prayer Times", description="You have been pinged for prayer times. You can change this by removing the reaction from the message in the channel you set up your server in", color=nextcord.Color.green()))
+    # If the user removes the reaction, remove the role
+    @commands.Cog.listener()
+    async def on_raw_reaction_remove(self, payload: nextcord.RawReactionActionEvent):
+        if await self.database.is_server_registered(payload.guild_id):
+            if payload.emoji.name == "🕌":
+                guild = self.bot.get_guild(payload.guild_id)
+                member = guild.get_member(payload.user_id)
+                await member.remove_roles(nextcord.Object(id=await self.database.get_athaan_role(payload.guild_id)))
+                await member.send(embed=nextcord.Embed(title="Prayer Times", description="You have been removed from the prayer times role. You can change this by adding the reaction back to the message in the channel you set up your server in", color=nextcord.Color.green()))
+    
