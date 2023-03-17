@@ -128,7 +128,8 @@ class PrayerManager(commands.Cog):
 
     @tasks.loop(seconds=60)
     async def athan(self):
-        for guild in self.bot.guilds:
+        for i in range(len(self.bot.guilds)):
+            guild = self.bot.guilds[i]
             if not await self.database.is_server_registered(guild.id):
                 continue
 
@@ -172,7 +173,7 @@ class PrayerManager(commands.Cog):
                     audio_path = os.path.join(athaans_path, random.choice(os.listdir(athaans_path)))
                     audio=nextcord.FFmpegOpusAudio(audio_path)
                     voice.play(audio, after=lambda x=None: (
-                        self.bot.loop.create_task(self.disconnect_from_vc(guild))))
+                        self.bot.loop.create_task(self.disconnect_from_vc(self.bot.guilds[i]))))
 
                 channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
                 await channel.send(f"{role.mention} {next_prayer} has started!")
