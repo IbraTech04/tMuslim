@@ -21,6 +21,12 @@ client.add_cog(Settings(client, database))
 async def on_ready():
     print(f"Logged in as {client.user}")
     await client.change_presence(status=nextcord.Status.online, activity=nextcord.Game("Praying for a successful API call"))
+    
+    # iterate through all the guilds and leave the vc if the bot is in one
+    for guild in client.guilds:
+        if guild.voice_client:
+            await guild.voice_client.disconnect()
+    
 
 @client.slash_command(name="sendpatchnotes", description="Send the latest patch notes")
 @commands.is_owner()
