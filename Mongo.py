@@ -185,3 +185,17 @@ class ServerManager:
             upsert=True  # creates the document if it doesn't exist
         )
 
+    async def get_24hr_time(self, guild_id: str) -> bool:
+        """
+        Returns whether the server has 24 hour time enabled
+
+        === Preconditions ===
+        guild_id is the id of the server and is in the database
+        """
+        return self.database.servers.find_one({"_id": guild_id})["24hr_time"] == "True"
+
+    async def toggle_24hrtime(self, guild_id: str, value: bool):
+        """
+        sets the 24 hour time to the given value
+        """
+        self.database.servers.update_one({"_id": guild_id}, {"$set": {"24hr_time": str(value)}})

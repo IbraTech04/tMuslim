@@ -6,6 +6,7 @@
     "athaanchannel": "",
     "role": "",
     "reaction_role_message": "",
-    "5_minute_reminder": "True"
+    "5_minute_reminder": "True",
+    "24hr_time": "True"
 }
 

@@ -47,3 +47,6 @@ class TimeManager:
             return f"{day}rd"
         else:
             return f"{day}th"
+    
+    async def conv_from_24hr(self, hour: int, change: bool):
+        return hour % 12 if change else hour
