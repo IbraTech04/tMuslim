@@ -27,8 +27,10 @@ async def on_ready():
     
     # iterate through all the guilds and leave the vc if the bot is in one
     for guild in client.guilds:
-        if guild.voice_client:
-            await guild.voice_client.disconnect()
+        if not guild.voice_client: 
+            # if it'sn ot in a VC, connect to the athan channel
+            vc = guild.get_channel(await database.get_athaan_chanel(guild.id))            
+            await vc.connect()            
     
 
 @client.slash_command(name="sendpatchnotes", description="Send the latest patch notes")
