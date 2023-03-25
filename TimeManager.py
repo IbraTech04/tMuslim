@@ -39,6 +39,7 @@ class TimeManager:
         return datetime.datetime.now(tz)
     
     async def return_suffix(self, day: int):
+        day = int(day)
         if day == 1 or day == 21 or day == 31:
             return f"{day}st"
         elif day == 2 or day == 22:
@@ -47,3 +48,8 @@ class TimeManager:
             return f"{day}rd"
         else:
             return f"{day}th"
+    
+    async def conv_from_24hr(self, time: int, change: bool):
+        time = time.split(":")
+        time[0] = str(int(time[0]) % 12 if change else int(time[0]) % 24)
+        return time.join(":")

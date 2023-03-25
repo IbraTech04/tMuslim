@@ -127,3 +127,12 @@ class Settings(commands.Cog):
                 await member.remove_roles(nextcord.Object(id=await self.database.get_athaan_role(payload.guild_id)))
                 await member.send(embed=nextcord.Embed(title="Prayer Times", description="You have been removed from the prayer times role. You can change this by adding the reaction back to the message in the channel you set up your server in", color=nextcord.Color.green()))
     
+    @nextcord.slash_command(name="toggle_24hour", description="Toggle 24 hour time")
+    async def toggletime(self, interaction: nextcord.Interaction):
+        if await self.database.is_server_registered(interaction.guild.id):
+            await interaction.response.defer()
+            curr_value = await self.database.get_24hr_time(interaction.guild.id)
+            await self.database.toggle_24hrtime(interaction.guild.id, not curr_value)
+            await interaction.followup.send(embed=nextcord.Embed(title="24 Hour Time", description=f"24 Hour Time has been toggled to {not curr_value}", color=nextcord.Color.green()))
+        else:
+            await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="Your server is not registered!", color=nextcord.Color.red()), ephemeral=True)

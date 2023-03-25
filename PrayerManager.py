@@ -28,7 +28,6 @@ class PrayerManager(commands.Cog):
         self.PRAYER_ORDER = ["Fajr", "Sunrise",
             "Dhuhr", "Asr", "Maghrib", "Isha"]
         self.athan.start()
-        self.leave_vc.start()
 
     async def _get_next_prayer(self, prayer_times, hour, minute):
         # Remove the _id key from the dictionary, if it exists
@@ -120,14 +119,6 @@ class PrayerManager(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    async def disconnect_from_vc(self, guild_id: int):
-        """
-        Method which disconnects the bot from the voice channel
-        """
-        guild = self.bot.get_guild(guild_id)
-        if guild.voice_client is not None:
-            await guild.voice_client.disconnect()
-
     @tasks.loop(seconds=60)
     async def athan(self):
         for guild in self.bot.guilds:
@@ -152,10 +143,13 @@ class PrayerManager(commands.Cog):
 
                     # check if the bot is already in a voice channel
                     voice = nextcord.utils.get(self.bot.voice_clients, guild=guild)
-                    if voice and voice.is_connected():
-                        continue
-                    voice = await vc.connect()
+                    if not (voice and voice.is_connected()):
+                        voice = await vc.connect()
 
+                    # check if the bot is already playing a sound
+                    if voice.is_playing():
+                        continue
+                    
                     members_with_role=[
                         member
                         for channel in guild.voice_channels
@@ -186,18 +180,6 @@ class PrayerManager(commands.Cog):
                 channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
                 await channel.send(f"{role.mention} {next_prayer} will start in 5 minutes!")
     
-    @tasks.loop(seconds=65)
-    async def leave_vc(self):
-        for guild in self.bot.guilds:
-            if not await self.database.is_server_registered(guild.id):
-                continue
-            voice = nextcord.utils.get(self.bot.voice_clients, guild=guild)
-            # we want to check if the bot is in a voice channel and connected. If so, we want to check if the bot is playing audio. If not, we want to disconnect the bot from the voice channel
-            
-            if voice and voice.is_connected():
-                if not voice.is_playing():
-                    await voice.disconnect()
-            
     
     @nextcord.slash_command(name="names", description="Returns a random name of Allah and its meaning")
     async def names(self, interaction:nextcord.Interaction, number: int = nextcord.SlashOption(name="number", description="The number of the name you want to view", required=False)):
