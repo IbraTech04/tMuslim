@@ -143,8 +143,11 @@ class PrayerManager(commands.Cog):
 
                     # check if the bot is already in a voice channel
                     voice = nextcord.utils.get(self.bot.voice_clients, guild=guild)
-                    if not (voice and voice.is_connected()):
-                        voice = await vc.connect()
+                    try:
+                        if not (voice and voice.is_connected()):
+                            voice = await vc.connect()
+                    except Exception:
+                        pass
 
                     # check if the bot is already playing a sound
                     if voice.is_playing():
