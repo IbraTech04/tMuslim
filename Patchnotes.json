@@ -1,21 +1,25 @@
 {
     "embed": {
-      "title": "tMuslim v2023.3 Patch Notes",
-      "description":"Welcome to the new tMuslim Architecture! Gone are the terrible non-OOP methods of yesterday! Hello Cogs and Classes! Here's the scoop on the new features:",
+      "title": "Eid Mubarak!",
+      "description":"Eid Mukarak to all tMuslim users! We hope you have a blessed Eid! Here's the scoop of the new tMuslim updates:",
       "color": 228111,
   
       "fields": [
         {
-          "name": ":Python: New Architecture!",
-          "value": "tMuslim has been fully rewritten to support Cogs! Adding new features is now easier than ever!"
+          "name": "Goodbye Ramadan Special commands :wave:",
+          "value": "We have removed the Ramadan special commands. We hope you enjoyed them! We will be adding more special commands in the future!"
         },
         {
-          "name": ":clock1: Disable 5-minute-reminder",
-          "value": "Do the 5-minute prayer reminders bother you? Well, bother no more! Now you have the option to disable reminders! Try /toggle5minutes"
+          "name": "Support for new languages :earth_africa:",
+          "value": "Coming soon! We are working on adding support for new languages! Stay tuned!"
         },
         {
-          "name": ":vscode: Faster than ever before!",
-          "value": "We removed redundant code and sped up common tasks! Now tMuslim is faster than ever!"
+          "name": "New commands :new:",
+          "value": "We have added new commands! With the next update, tou can  use `/quran` to get a random verse from the Quran! You will also be able to use use `/hadith` to get a random hadith from the Sahih Bukhari!"
+        },
+        {
+          "name": "Bug fixes :bug:",
+          "value": "We have fixed some bugs and improved the stability of the bot! We will be adding more features in the future!"
         }
       ]
     }

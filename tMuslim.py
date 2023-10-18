@@ -4,7 +4,7 @@ from nextcord.ext import commands
 from PrayerManager import PrayerManager
 from Settings import Settings
 from Mongo import ServerManager
-from Ramadan import RamadanSpecial
+# from Ramadan import RamadanSpecial
 import os
 intents = nextcord.Intents.all()
 
@@ -18,7 +18,7 @@ prayers = PrayerManager(client, database)
 
 client.add_cog(prayers)
 client.add_cog(Settings(client, database))
-client.add_cog(RamadanSpecial(client, database, prayers))
+# client.add_cog(RamadanSpecial(client, database, prayers))
 
 @client.event
 async def on_ready():
@@ -27,12 +27,14 @@ async def on_ready():
     
     # iterate through all the guilds and leave the vc if the bot is in one
     for guild in client.guilds:
-        if not guild.voice_client: 
-            # if it'sn ot in a VC, connect to the athan channel
+        voice = nextcord.utils.get(client.voice_clients, guild=guild)
+        if not (voice and voice.is_connected()):
+            # if it's not in a VC, connect to the athan channel
             vc = guild.get_channel(await database.get_athaan_chanel(guild.id))            
             await vc.connect()            
     
 
+@commands.is_owner()
 @client.slash_command(name="sendpatchnotes", description="Send the latest patch notes")
 async def send_patch_notes(interaction: nextcord.Interaction, patch_notes: nextcord.Attachment):
     # The file will be a JSON file representing an embed of the patch notes

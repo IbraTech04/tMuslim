@@ -61,6 +61,7 @@ class RamadanSpecial(commands.Cog):
             return
         
         location = await self.database.get_server_location(interaction.guild.id)
+        location = ", ".join(map(str, location))
         time = await self.timehelper.get_time_in_timezone(await self.database.get_timezone(interaction.guild.id))
         prayer_times = await self.prayermanager._get_prayer_list(location, time)
         

@@ -119,7 +119,7 @@ class PrayerManager(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @tasks.loop(seconds=60)
+    @tasks.loop(seconds=1)
     async def athan(self):
         for guild in self.bot.guilds:
             if not await self.database.is_server_registered(guild.id):
@@ -173,7 +173,7 @@ class PrayerManager(commands.Cog):
                     voice.play(audio)
 
                 channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
-                await channel.send(f"{role.mention} {next_prayer} has started!")
+                # await channel.send(f"{role.mention} {next_prayer} has started!")
 
             elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{(int(next_prayer_time[3:5])-5)%60:02d}":
                 # Check to see if they've enabled 5-minute reminders
