@@ -114,6 +114,8 @@ class Settings(commands.Cog):
             #check if it's the bot
             if payload.user_id == self.bot.user.id:
                 return
+            if payload.channel_id != await self.database.get_reaction_message_id(payload.guild_id):
+                return
             if payload.emoji.name == "🕌":
                 await payload.member.add_roles(nextcord.Object(id=await self.database.get_athaan_role(payload.guild_id)))
                 await payload.member.send(embed=nextcord.Embed(title="Prayer Times", description="You have been pinged for prayer times. You can change this by removing the reaction from the message in the channel you set up your server in", color=nextcord.Color.green()))
@@ -121,6 +123,8 @@ class Settings(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: nextcord.RawReactionActionEvent):
         if await self.database.is_server_registered(payload.guild_id):
+            if payload.channel_id != await self.database.get_reaction_message_id(payload.guild_id):
+                return
             if payload.emoji.name == "🕌":
                 guild = self.bot.get_guild(payload.guild_id)
                 member = guild.get_member(payload.user_id)
