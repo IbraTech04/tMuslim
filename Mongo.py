@@ -199,3 +199,20 @@ class ServerManager:
         sets the 24 hour time to the given value
         """
         self.database.servers.update_one({"_id": guild_id}, {"$set": {"24hr_time": str(value)}})
+        
+    async def log_original_vcs(self, guild_id: str, users: dict[str, int]):
+        """
+        Logs the original VCs users were in before the bot joined
+        users is a dictionary of user_id: vc_id
+        """
+        self.database.servers.update_one({"_id": guild_id}, {"$set": {"original_vcs": users}})
+    
+    async def get_original_vcs(self, guild_id: str) -> dict[str, int]:
+        """
+        Returns the original VCs users were in before the bot joined, if it exists
+        else returns an empty dictionary
+        """
+        try:
+            return self.database.servers.find_one({"_id": guild_id})["original_vcs"]
+        except KeyError:
+            return {}

@@ -1,6 +1,6 @@
 import json
 import nextcord
-from nextcord.ext import commands
+from nextcord.ext import commands, application_checks
 from PrayerManager import PrayerManager
 from Settings import Settings
 from Mongo import ServerManager
@@ -12,44 +12,31 @@ client = commands.Bot(intents=intents)
 
 import dotenv
 dotenv.load_dotenv("token.env")
+athan_loops = {}
 
 database = ServerManager(os.getenv("PYMONGO_CREDS"), "tMuslim")
 prayers = PrayerManager(client, database)
 
 client.add_cog(prayers)
-client.add_cog(Settings(client, database))
-# client.add_cog(RamadanSpecial(client, database, prayers))
+client.add_cog(Settings(client, database, athan_loops, prayers))
+
 
 @client.event
 async def on_ready():
     print(f"Logged in as {client.user}")
     await client.change_presence(status=nextcord.Status.online, activity=nextcord.Game("Praying for a successful API call"))
     
-    # iterate through all the guilds and leave the vc if the bot is in one
     for guild in client.guilds:
-        voice = nextcord.utils.get(client.voice_clients, guild=guild)
-        if not (voice and voice.is_connected()):
-            # if it's not in a VC, connect to the athan channel
-            vc = guild.get_channel(await database.get_athaan_chanel(guild.id))            
-            await vc.connect()            
-    
+        if not await database.is_server_registered(guild.id):
+            continue
+        athan_loops[guild.id] = client.loop.create_task(prayers.athan(guild.id))
 
-@commands.is_owner()
-@client.slash_command(name="sendpatchnotes", description="Send the latest patch notes")
-async def send_patch_notes(interaction: nextcord.Interaction, patch_notes: nextcord.Attachment):
-    # The file will be a JSON file representing an embed of the patch notes
-    
-    # Read the file
-    await interaction.response.defer()
-    await patch_notes.save(patch_notes.filename)
-    js = json.load(open(patch_notes.filename))
-    data = js["embed"]
-    embed=  nextcord.embeds.Embed.from_dict(data)
-    
-    for guild in client.guilds:
-        channel = client.get_channel(await database.get_announcement_channel(guild.id))
-        await channel.send(embed=embed)
-    
-    await interaction.followup.send("Patch notes sent!")
+# When the bot leaves a server
+@client.event
+async def on_guild_remove(self, guild: nextcord.Guild):
+    await database.unregister_server(guild.id)
+    # Remove them fro mteh athan_loops
+    athan_loops[guild.id].cancel()
+    del athan_loops[guild.id]
             
 client.run(os.getenv("TMUSLIM_TOKEN"))

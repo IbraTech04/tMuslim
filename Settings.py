@@ -1,47 +1,58 @@
 import nextcord
 from nextcord import SlashOption
-from nextcord.ext import commands, tasks
+from nextcord.ext import commands, application_checks
 from timezonefinder import TimezoneFinder
 from Mongo import ServerManager
 import pytz
 from geopy.geocoders import Nominatim
 import json
+import PrayerManager
 
 class Settings(commands.Cog):
     """
     Class which handles all settings-related commands
     i.e: setup, location, etc.
     """
-    
-    def __init__(self, bot: commands.Bot, database: ServerManager):
+    def __init__(self, bot: commands.Bot, database: ServerManager, athan_loops: dict, prayers: PrayerManager):
         self.bot = bot
-        self.database = database
+        self.database = database    
+        self.athan_loops = athan_loops
+        self.prayers = prayers
     
-    @nextcord.slash_command(name="toggle5minutes", description="Toggle the 5-minute warning for prayer times")
-    async def toggle(self, interaction: nextcord.Interaction):
+    @nextcord.slash_command(name="settings", description="base command for settings")
+    async def settings(self, interaction: nextcord.Interaction):
+        pass
+    
+    @settings.subcommand(name="reminders", description="Enable or disable 5-minute warnings for prayers")
+    @application_checks.has_guild_permissions(manage_guild=True)
+    async def toggle(self, interaction: nextcord.Interaction, value: bool = SlashOption(required=True, description="The value to set", choices={"On": True, "Off": False})):
         if not await self.database.is_server_registered(interaction.guild.id):
             await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="Your server is not registered!", color=nextcord.Color.red()), ephemeral=True)
             return
-        
         # Get the current value of the setting
         value = await self.database.get_five_minute_reminder(interaction.guild.id)
         value = not value
         await self.database.set_five_minute_reminder(interaction.guild.id, value)
         await interaction.response.send_message(embed=nextcord.Embed(title="Success", description=f"5-minute reminder set to {value}", color=nextcord.Color.green()), ephemeral=True)
         
-    @commands.Cog.listener()
-    async def on_guild_remove(self, guild: nextcord.Guild):
-        await self.database.delete_server(guild.id)
         
-    @nextcord.slash_command(name="unregister", description="Delete all data associated with your server")
+    @settings.subcommand(name="unregister", description="Delete all data associated with your server")
+    @application_checks.has_guild_permissions(manage_guild=True)
     async def unregister(self, interaction: nextcord.Interaction):
         if not await self.database.is_server_registered(interaction.guild.id):
             await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="Your server is not registered!", color=nextcord.Color.red()), ephemeral=True)
-        
-        await self.database.delete_server(interaction.guild.id)
+            return
+        self._unregister(interaction.guild)
         await interaction.response.send_message(embed=nextcord.Embed(title="Success", description="Your server has been unregistered!", color=nextcord.Color.green()), ephemeral=True)
     
-    @nextcord.slash_command(description="Setup your server for use with the bot")
+    def _unregister(self, guild: nextcord.Guild):
+        self.database.unregister_server(guild.id)
+        # Remove them from teh athan_loops
+        self.athan_loops[guild.id].cancel()
+        del self.athan_loops[guild.id]
+    
+    @settings.subcommand(name="register", description="Setup your server for use with the bot")
+    @application_checks.has_guild_permissions(manage_guild=True)
     async def setup(self, interaction: nextcord.Interaction, city: str = SlashOption(required=True, description="Your city"),
                     country: str = SlashOption(required=True, description="Your country"),
                     role: nextcord.Role = SlashOption(required=False, description="The role to ping for prayer times. If not provided, the bot will create a new role."),
@@ -86,7 +97,6 @@ class Settings(commands.Cog):
                 # Only people with "role" should be able to see the channel
                 athaan_channel = await interaction.guild.create_voice_channel(name="🕌tMuslim Athaan", category=category, overwrites={interaction.guild.default_role: nextcord.PermissionOverwrite(connect=False), role: nextcord.PermissionOverwrite(connect=True)})
             await athaan_channel.set_permissions(interaction.guild.me, connect=True, speak=True)
-            await athaan_channel.set_permissions(interaction.guild.me, connect=True, speak=True)
             message = await reaction_roles.send(embed=nextcord.Embed(title="Prayer Times", description="React to this message to get pinged for prayer times", color=nextcord.Color.green()))
             
             default_settings = json.load(open("default_settings.json"))
@@ -101,6 +111,8 @@ class Settings(commands.Cog):
             await self.database.register_server(interaction.guild.id, default_settings)
 
             await message.add_reaction("🕌")
+            # Finally, add the athan loop
+            self.athan_loops[interaction.guild.id] = self.bot.loop.create_task(self.prayers.athan(interaction.guild.id))
             await interaction.followup.send(embed=nextcord.Embed(title="🕌 Setup Complete", description="Setup complete! tMuslim's feature are now active in this server", color=nextcord.Color.green()))
         except Exception as e:
             print(e)
@@ -110,33 +122,37 @@ class Settings(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: nextcord.RawReactionActionEvent):
         # check if the server is registered
-        if await self.database.is_server_registered(payload.guild_id):
-            #check if it's the bot
-            if payload.user_id == self.bot.user.id:
-                return
-            if payload.channel_id != await self.database.get_reaction_message_id(payload.guild_id):
-                return
-            if payload.emoji.name == "🕌":
-                await payload.member.add_roles(nextcord.Object(id=await self.database.get_athaan_role(payload.guild_id)))
-                await payload.member.send(embed=nextcord.Embed(title="Prayer Times", description="You have been pinged for prayer times. You can change this by removing the reaction from the message in the channel you set up your server in", color=nextcord.Color.green()))
+        if not await self.database.is_server_registered(payload.guild_id):
+            return
+        #check if it's the bot
+        if payload.user_id == self.bot.user.id:
+            return
+        if payload.message_id != await self.database.get_reaction_message_id(payload.guild_id):
+            return
+        if payload.emoji.name == "🕌":
+            guild = self.bot.get_guild(payload.guild_id)
+            await payload.member.add_roles(nextcord.Object(id=await self.database.get_athaan_role(payload.guild_id)))
+            await payload.member.send(embed=nextcord.Embed(title="🕌 Prayer Times", description=f"You have subscribed to tMuslim notifications in {guild.name}", color=nextcord.Color.green()))
+    
     # If the user removes the reaction, remove the role
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: nextcord.RawReactionActionEvent):
-        if await self.database.is_server_registered(payload.guild_id):
-            if payload.channel_id != await self.database.get_reaction_message_id(payload.guild_id):
-                return
-            if payload.emoji.name == "🕌":
-                guild = self.bot.get_guild(payload.guild_id)
-                member = guild.get_member(payload.user_id)
-                await member.remove_roles(nextcord.Object(id=await self.database.get_athaan_role(payload.guild_id)))
-                await member.send(embed=nextcord.Embed(title="Prayer Times", description="You have been removed from the prayer times role. You can change this by adding the reaction back to the message in the channel you set up your server in", color=nextcord.Color.green()))
+        if not await self.database.is_server_registered(payload.guild_id):
+            return
+        if payload.message_id != await self.database.get_reaction_message_id(payload.guild_id):
+            return
+        if payload.emoji.name == "🕌":
+            guild = self.bot.get_guild(payload.guild_id)
+            member = guild.get_member(payload.user_id)
+            await member.remove_roles(nextcord.Object(id=await self.database.get_athaan_role(payload.guild_id)))
+            await member.send(embed=nextcord.Embed(title="🕌 Prayer Times", description=f"You have unsubscribed from tMuslim notifications in {guild.name}", color=nextcord.Color.green()))
     
-    @nextcord.slash_command(name="toggle_24hour", description="Toggle 24 hour time")
-    async def toggletime(self, interaction: nextcord.Interaction):
-        if await self.database.is_server_registered(interaction.guild.id):
-            await interaction.response.defer()
-            curr_value = await self.database.get_24hr_time(interaction.guild.id)
-            await self.database.toggle_24hrtime(interaction.guild.id, not curr_value)
-            await interaction.followup.send(embed=nextcord.Embed(title="24 Hour Time", description=f"24 Hour Time has been toggled to {not curr_value}", color=nextcord.Color.green()))
-        else:
+    @settings.subcommand(name="time", description="Set your preffered time format (12/24 hour)")
+    async def toggletime(self, interaction: nextcord.Interaction, value: bool = SlashOption(required=True, description="The value to set", choices={"12 Hour Time": False, "24 Hour Time": True})):
+        if not await self.database.is_server_registered(interaction.guild.id):
             await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="Your server is not registered!", color=nextcord.Color.red()), ephemeral=True)
+            return
+        await interaction.response.defer()
+        curr_value = await self.database.get_24hr_time(interaction.guild.id)
+        await self.database.toggle_24hrtime(interaction.guild.id, not curr_value)
+        await interaction.followup.send(embed=nextcord.Embed(title="24 Hour Time", description=f"24 Hour Time has been toggled to {not curr_value}", color=nextcord.Color.green()))
