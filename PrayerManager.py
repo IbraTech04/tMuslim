@@ -28,7 +28,11 @@ class PrayerManager(commands.Cog):
         self.timehelper = TimeManager()
         self.PRAYER_ORDER = ["Fajr", "Sunrise",
             "Dhuhr", "Asr", "Maghrib", "Isha"]
+        self.methods = {False: self.timehelper.conv_from_24hr, True: self.return_str}
 
+    async def return_str(self, time: str):
+        return time
+    
     async def _get_next_prayer(self, prayer_times, hour, minute):
         # Remove the _id key from the dictionary, if it exists
         prayer_times.pop("_id", None)
@@ -86,11 +90,12 @@ class PrayerManager(commands.Cog):
         if nextPrayer == "Fajr" and (hour > int(prayer_times["Isha"][0:2]) or (hour == int(prayer_times["Isha"][0:2]) and minute > int(prayer_times["Isha"][3:5]))):
             time = time + datetime.timedelta(days=1)
             prayer_times = await self._get_prayer_list(location, time)
+        time_in_24hr = await self.database.get_24hr_time(interaction.guild.id)
 
         nextPrayerTime = prayer_times[nextPrayer]
         # calculate remaining time
         timeUntil = await self.timehelper.calculateRemainingTime(int(nextPrayerTime[0:2]), int(nextPrayerTime[3:5]), hour, minute, nextPrayer == "Fajr")
-        await interaction.response.send_message(embed=nextcord.Embed(title="Next Prayer", description=f"The next prayer is **{nextPrayer}** in **{timeUntil[0]} hours and {timeUntil[1]} minutes** ({nextPrayerTime})", color=nextcord.Color.green()))
+        await interaction.response.send_message(embed=nextcord.Embed(title="Next Prayer", description=f"The next prayer is **{nextPrayer}** in **{timeUntil[0]} hours and {timeUntil[1]} minutes** ({await self.methods[time_in_24hr](nextPrayerTime)})", color=nextcord.Color.green()))
 
     @prayers.subcommand(name="list", description="View a list of all prayer times in your city")
     async def prayerlist(self, interaction: nextcord.Interaction):
@@ -107,7 +112,7 @@ class PrayerManager(commands.Cog):
         prayer_times = await self._get_prayer_list(location, time)
         hour = time.hour
         minute = time.minute
-
+        time_in_24hr = await self.database.get_24hr_time(interaction.guild.id)
 
         next_prayer = await self._get_next_prayer(prayer_times, hour, minute)
 
@@ -119,10 +124,10 @@ class PrayerManager(commands.Cog):
         for prayer in self.PRAYER_ORDER:
             if prayer == next_prayer:
                 embed.add_field(
-                    name=f"**{prayer}**", value=f"**{prayer_times[prayer]}**", inline=False)
+                    name=f"**{prayer}**", value=f"**{await self.methods[time_in_24hr](prayer_times[prayer])}**", inline=False)
                 continue
             embed.add_field(
-                name=f"{prayer}", value=f"{prayer_times[prayer]}", inline=False)
+                name=f"{prayer}", value=f"{await self.methods[time_in_24hr](prayer_times[prayer])}", inline=False)
 
         await interaction.response.send_message(embed=embed)
 

@@ -49,7 +49,8 @@ class TimeManager:
         else:
             return f"{day}th"
     
-    async def conv_from_24hr(self, time: int, change: bool):
+    async def conv_from_24hr(self, time: str):
         time = time.split(":")
-        time[0] = str(int(time[0]) % 12 if change else int(time[0]) % 24)
-        return time.join(":")
+        suffix = "AM" if int(time[0]) < 12 else "PM"
+        time[0] = str(int(time[0]) % 12) if int(time[0]) != 12 else "12"
+        return ":".join(time) + suffix

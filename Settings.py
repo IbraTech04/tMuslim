@@ -25,13 +25,12 @@ class Settings(commands.Cog):
     
     @settings.subcommand(name="reminders", description="Enable or disable 5-minute warnings for prayers")
     @application_checks.has_guild_permissions(manage_guild=True)
-    async def toggle(self, interaction: nextcord.Interaction, value: bool = SlashOption(required=True, description="The value to set", choices={"On": True, "Off": False})):
+    async def toggle(self, interaction: nextcord.Interaction, value: str = SlashOption(required=True, description="The value to set", choices=["On", "Off"])):
+        value = value == "On"
         if not await self.database.is_server_registered(interaction.guild.id):
             await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="Your server is not registered!", color=nextcord.Color.red()), ephemeral=True)
             return
         # Get the current value of the setting
-        value = await self.database.get_five_minute_reminder(interaction.guild.id)
-        value = not value
         await self.database.set_five_minute_reminder(interaction.guild.id, value)
         await interaction.response.send_message(embed=nextcord.Embed(title="Success", description=f"5-minute reminder set to {value}", color=nextcord.Color.green()), ephemeral=True)
         
@@ -148,11 +147,14 @@ class Settings(commands.Cog):
             await member.send(embed=nextcord.Embed(title="🕌 Prayer Times", description=f"You have unsubscribed from tMuslim notifications in {guild.name}", color=nextcord.Color.green()))
     
     @settings.subcommand(name="time", description="Set your preffered time format (12/24 hour)")
-    async def toggletime(self, interaction: nextcord.Interaction, value: bool = SlashOption(required=True, description="The value to set", choices={"12 Hour Time": False, "24 Hour Time": True})):
+    async def toggletime(self, interaction: nextcord.Interaction, value: str = SlashOption(required=True, description="The value to set", choices=["12-Hour Time", "24-Hour Time"])):
+        value = value == "24-Hour Time"
         if not await self.database.is_server_registered(interaction.guild.id):
             await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="Your server is not registered!", color=nextcord.Color.red()), ephemeral=True)
             return
         await interaction.response.defer()
-        curr_value = await self.database.get_24hr_time(interaction.guild.id)
-        await self.database.toggle_24hrtime(interaction.guild.id, not curr_value)
-        await interaction.followup.send(embed=nextcord.Embed(title="24 Hour Time", description=f"24 Hour Time has been toggled to {not curr_value}", color=nextcord.Color.green()))
+        await self.database.toggle_24hrtime(interaction.guild.id, value)
+        if value:
+            await interaction.followup.send(embed=nextcord.Embed(title="24 Hour Time", description=f"24 Hour Time has been enabled", color=nextcord.Color.green()))
+            return
+        await interaction.followup.send(embed=nextcord.Embed(title="12 Hour Time", description=f"12 Hour Time has been enabled", color=nextcord.Color.green()))
