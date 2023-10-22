@@ -145,10 +145,10 @@ class PrayerManager(commands.Cog):
             hour = time.hour
             minute = time.minute
 
-            if f"{hour:02d}:{minute:02d}" == next_prayer_time or True:
+            if f"{hour:02d}:{minute:02d}" == next_prayer_time:
                 role = guild.get_role(await self.database.get_athaan_role(guild.id))
                 channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
-                # await channel.send(f"{role.mention} {next_prayer} has started!")
+                await channel.send(f"{role.mention} {next_prayer} has started!")
                 if next_prayer != "Sunrise":
                     vc = guild.get_channel(await
                         self.database.get_athaan_chanel(guild.id))
