@@ -132,68 +132,70 @@ class PrayerManager(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     async def athan(self, guild_id: int):
-        guild = self.bot.get_guild(guild_id)
+        while True:
+            guild = self.bot.get_guild(guild_id)
 
-        location = await self.database.get_server_location(guild.id)
-        time = await self.timehelper.get_time_in_timezone(await self.database.get_timezone(guild.id))
-        prayer_times = await self._get_prayer_list(location, time)
-        
-        next_prayer = await self._get_next_prayer(prayer_times, time.hour, time.minute)
-        next_prayer_time = prayer_times[next_prayer]
+            location = await self.database.get_server_location(guild.id)
+            time = await self.timehelper.get_time_in_timezone(await self.database.get_timezone(guild.id))
+            prayer_times = await self._get_prayer_list(location, time)
+            
+            next_prayer = await self._get_next_prayer(prayer_times, time.hour, time.minute)
+            next_prayer_time = prayer_times[next_prayer]
 
-        hour = time.hour
-        minute = time.minute
+            hour = time.hour
+            minute = time.minute
 
-        if f"{hour:02d}:{minute:02d}" == next_prayer_time:
-            role = guild.get_role(await self.database.get_athaan_role(guild.id))
-            channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
-            await channel.send(f"{role.mention} {next_prayer} has started!")
-            if next_prayer != "Sunrise":
-                vc = guild.get_channel(await
-                    self.database.get_athaan_chanel(guild.id))
+            if f"{hour:02d}:{minute:02d}" == next_prayer_time or True:
+                role = guild.get_role(await self.database.get_athaan_role(guild.id))
+                channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
+                # await channel.send(f"{role.mention} {next_prayer} has started!")
+                if next_prayer != "Sunrise":
+                    vc = guild.get_channel(await
+                        self.database.get_athaan_chanel(guild.id))
 
-                # check if the bot is already in a voice channel
-                voice = nextcord.utils.get(self.bot.voice_clients, guild=guild)
-                try:
-                    if not (voice and voice.is_connected()):
-                        voice = await vc.connect()
-                except Exception:
-                    pass
-                
-                members_with_role=[
-                    member
-                    for channel in guild.voice_channels
-                    for member in channel.members
-                    if role in member.roles and member.id != 1084319883635982496 and channel.id != vc.id
-                ]
-                og_vcs = {member: member.voice.channel for member in members_with_role}
-                for member in members_with_role:
-                    await member.move_to(vc)
-
-                athaans_path = os.path.join(os.getcwd(), "Athaans")
-                if next_prayer == "Fajr":
-                    athaans_path = os.path.join(athaans_path, "Fajr")
-                else:
-                    athaans_path = os.path.join(athaans_path, "Other")
-                # pick a random athaan 
-                audio_path = os.path.join(athaans_path, random.choice(os.listdir(athaans_path)))
-                audio=nextcord.FFmpegOpusAudio(audio_path)
-                voice.play(audio)
-                while voice.is_playing():
-                    await asyncio.sleep(1)
-                await voice.disconnect()
-                for user, vc in og_vcs.items():
+                    # check if the bot is already in a voice channel
+                    voice = nextcord.utils.get(self.bot.voice_clients, guild=guild)
                     try:
-                        await user.move_to(vc)
+                        if not (voice and voice.is_connected()):
+                            voice = await vc.connect()
                     except Exception:
                         pass
                     
+                    members_with_role=[
+                        member
+                        for channel in guild.voice_channels
+                        for member in channel.members
+                        if role in member.roles and member.id != 1084319883635982496 and channel.id != vc.id
+                    ]
+                    og_vcs = {member: member.voice.channel for member in members_with_role}
+                    for member in members_with_role:
+                        await member.move_to(vc)
 
-        elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{(int(next_prayer_time[3:5])-5)%60:02d}":
-            # Check to see if they've enabled 5-minute reminders
-            role = guild.get_role(await self.database.get_athaan_role(guild.id))
-            channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
-            await channel.send(f"{role.mention} {next_prayer} will start in 5 minutes!")
+                    athaans_path = os.path.join(os.getcwd(), "Athaans")
+                    if next_prayer == "Fajr":
+                        athaans_path = os.path.join(athaans_path, "Fajr")
+                    else:
+                        athaans_path = os.path.join(athaans_path, "Other")
+                    # pick a random athaan 
+                    audio_path = os.path.join(athaans_path, random.choice(os.listdir(athaans_path)))
+                    audio=nextcord.FFmpegOpusAudio(audio_path)
+                    voice.play(audio)
+                    while voice.is_playing():
+                        await asyncio.sleep(1)
+                    await voice.disconnect()
+                    for user, vc in og_vcs.items():
+                        try:
+                            await user.move_to(vc)
+                        except Exception:
+                            pass
+                        
+
+            elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{(int(next_prayer_time[3:5])-5)%60:02d}":
+                # Check to see if they've enabled 5-minute reminders
+                role = guild.get_role(await self.database.get_athaan_role(guild.id))
+                channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
+                await channel.send(f"{role.mention} {next_prayer} will start in 5 minutes!")
+            await asyncio.sleep(60)
     
     @nextcord.slash_command(name="islam", description="Islam-related commands")
     async def islam(self, interaction: nextcord.Interaction):
