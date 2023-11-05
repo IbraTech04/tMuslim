@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import nextcord
 from nextcord.ext import commands, application_checks
@@ -25,7 +26,12 @@ client.add_cog(Settings(client, database, athan_loops, prayers))
 async def on_ready():
     print(f"Logged in as {client.user}")
     await client.change_presence(status=nextcord.Status.online, activity=nextcord.Game("Praying for a successful API call"))
-    
+    # Wait for the time to be at exactly 00 seconds and 00 milliseconds
+    # This is to prevent the bot from inaccurate timings for prayers in servers
+    while True:
+        if datetime.now().second == 0:
+            break
+    print("Starting athan loops")
     for guild in client.guilds:
         if not await database.is_server_registered(guild.id):
             continue

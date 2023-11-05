@@ -41,15 +41,13 @@ class Settings(commands.Cog):
         if not await self.database.is_server_registered(interaction.guild.id):
             await interaction.response.send_message(embed=nextcord.Embed(title="Error", description="Your server is not registered!", color=nextcord.Color.red()), ephemeral=True)
             return
-        self._unregister(interaction.guild)
+        await self.database.unregister_server(interaction.guild.id)
+        # Remove them from teh athan_loops
+        self.athan_loops[interaction.guild.id].cancel()
+        del self.athan_loops[interaction.guild.id]
         await interaction.response.send_message(embed=nextcord.Embed(title="Success", description="Your server has been unregistered!", color=nextcord.Color.green()), ephemeral=True)
     
-    def _unregister(self, guild: nextcord.Guild):
-        self.database.unregister_server(guild.id)
-        # Remove them from teh athan_loops
-        self.athan_loops[guild.id].cancel()
-        del self.athan_loops[guild.id]
-    
+
     @settings.subcommand(name="register", description="Setup your server for use with the bot")
     @application_checks.has_guild_permissions(manage_guild=True)
     async def setup(self, interaction: nextcord.Interaction, city: str = SlashOption(required=True, description="Your city"),
@@ -65,7 +63,7 @@ class Settings(commands.Cog):
 
         try:
             await interaction.response.defer()
-            geolocator = Nominatim(user_agent="geoapiExercises")
+            geolocator = Nominatim(user_agent="tmuslim-discord-bot")
             location = geolocator.geocode(f"{city}, {country}")
             obj = TimezoneFinder()
             time_zone = obj.timezone_at(lng=location.longitude, lat=location.latitude)
@@ -94,7 +92,7 @@ class Settings(commands.Cog):
                     category = await interaction.guild.create_category("🕌tMuslim")
                 # Make a new channel called "tMuslim Athaan"
                 # Only people with "role" should be able to see the channel
-                athaan_channel = await interaction.guild.create_voice_channel(name="🕌tMuslim Athaan", category=category, overwrites={interaction.guild.default_role: nextcord.PermissionOverwrite(connect=False), role: nextcord.PermissionOverwrite(connect=True)})
+                athaan_channel = await interaction.guild.create_voice_channel(name="🕌tMuslim Athaan", category=category, overwrites={interaction.guild.default_role: nextcord.PermissionOverwrite(connect=False), role: nextcord.PermissionOverwrite(connect=True, speak=False), interaction.guild.me: nextcord.PermissionOverwrite(connect=True, speak=True)})
             await athaan_channel.set_permissions(interaction.guild.me, connect=True, speak=True)
             message = await reaction_roles.send(embed=nextcord.Embed(title="Prayer Times", description="React to this message to get pinged for prayer times", color=nextcord.Color.green()))
             

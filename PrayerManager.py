@@ -145,10 +145,10 @@ class PrayerManager(commands.Cog):
             hour = time.hour
             minute = time.minute
 
-            if f"{hour:02d}:{minute:02d}" == next_prayer_time:
+            if f"{hour:02d}:{minute:02d}" == next_prayer_time or True:
                 role = guild.get_role(await self.database.get_athaan_role(guild.id))
                 channel=guild.get_channel(await self.database.get_announcement_channel(guild.id))
-                await channel.send(f"{role.mention} {next_prayer} has started!")
+                # await channel.send(f"{role.mention} {next_prayer} has started!")
                 if next_prayer != "Sunrise":
                     vc = guild.get_channel(await
                         self.database.get_athaan_chanel(guild.id))
@@ -183,12 +183,12 @@ class PrayerManager(commands.Cog):
                     while voice.is_playing():
                         await asyncio.sleep(1)
                     await voice.disconnect()
-                    for user, vc in og_vcs.items():
-                        try:
-                            await user.move_to(vc)
-                        except Exception:
-                            pass
-                        
+                    for user in vc.members:
+                        original_channel = og_vcs.get(user, None)
+                        if original_channel is not None:
+                            await user.move_to(original_channel)
+                            continue
+                        await user.move_to(None)                        
 
             elif f"{hour:02d}:{minute:02d}" == f"{int(next_prayer_time[:2]):02d}:{(int(next_prayer_time[3:5])-5)%60:02d}":
                 # Check to see if they've enabled 5-minute reminders
