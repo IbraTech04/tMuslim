@@ -5,7 +5,7 @@ from nextcord.ext import commands, application_checks
 from PrayerManager import PrayerManager
 from Settings import Settings
 from Mongo import ServerManager
-# from Ramadan import RamadanSpecial
+from Ramadan import RamadanSpecial
 import os
 intents = nextcord.Intents.all()
 
@@ -21,6 +21,8 @@ prayers = PrayerManager(client, database)
 client.add_cog(prayers)
 client.add_cog(Settings(client, database, athan_loops, prayers))
 
+ramadan = RamadanSpecial(client, database, prayers)
+client.add_cog(ramadan)
 
 @client.event
 async def on_ready():
